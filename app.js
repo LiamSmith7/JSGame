@@ -2,12 +2,15 @@
 //   GENERAL VARIABLES AND FUNCTIONS
 // ============================================================================================================================================= //
 
-let game = document.getElementById("game");
+const game = document.getElementById("game");
 let paused = true;
 
 let world = [];
 let entities = [];
 let projectiles = [];
+
+const HALFPI = Math.PI / 2;
+const TAU = Math.PI * 2;
 
 let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
 let mousePos = {X: 0, Y: 0};
@@ -50,17 +53,17 @@ function normalizeVector(vector){
     }
 }
 
-const HALFPI = Math.PI / 2;
 function findAngleFromUnitVector(unitVector){
     return HALFPI + (unitVector.X < 0 ? Math.acos(unitVector.Y) : -Math.acos(unitVector.Y));
 }
-
 
 function findAngle(pos1, pos2){
     return findAngleFromUnitVector(normalizeVector(getVector(pos1, pos2)));
 }
 
-
+function findUnitVectorFromAngle(angle){
+    return {X: -Math.sin(angle - HALFPI), Y: Math.cos(angle - HALFPI)}
+}
 
 // ============================================================================================================================================= //
 //   WORLD
@@ -101,6 +104,12 @@ function read(x, y){
 function start(){
     paused = false;
 
+    clearInterval(game.interval);
+
+    // Clears the arrays
+    entities.length = 0;
+    projectiles.length = 0;
+
     // Outer walls
     placeHorizontal(10, 10, 30, 1);
     placeHorizontal(30, 10, 30, 1);
@@ -122,17 +131,23 @@ function start(){
     place(21, 23, null);
 
     // Building 3
-    placeBox(24, 13, 28, 20, 1)
-    placeBox(26, 13, 26, 20, null)
+    placeBox(24, 13, 28, 20, 1);
+    placeBox(26, 13, 26, 20, null);
 
-    place(40, 40, 1);
+    // Area2
+    placeBox(30, 10, 50, 30, 1);
+    placeBox(31, 11, 49, 29, null);
+    place(30, 20, null);
 
-    player = new Player(20.0, 20.0);
+    placeHorizontal(22, 37, 47, 1);
+
+    player = new Player(20, 20);
     entities.push(player);
 
     entities.push(new Enemy(12, 28));
     entities.push(new Enemy(26.8, 25));
     entities.push(new LargeEnemy(21.2, 13.6));
+    entities.push(new ClusterEnemy(47, 27));
 
     game.interval = setInterval(update, 20);
 }
@@ -141,8 +156,13 @@ function start(){
 //   DRAWING
 // ============================================================================================================================================= //
 
-let size = 10;
+let size = 20;
+let ctx = game.getContext("2d");
+
+
 function draw(){
+
+    // World
     for(let x = 0; x < world.length; x++){
         if(world[x] != null){
             for(let y = 0; y < world.length; y++){
@@ -155,25 +175,7 @@ function draw(){
         }
     }
 
-    ctx = game.getContext("2d");
-
-    for(const i in entities){
-        let entity = entities[i];
-        let position = entity.position;
-        let hitbox = entity.hitbox;
-        let hitboxHalf = entity.hitboxHalf;
-        ctx.fillStyle = entity.colour;
-        ctx.fillRect((position.X - hitboxHalf.X) * size , (position.Y - hitboxHalf.Y) * size, hitbox.X * size, hitbox.Y * size);
-
-        ctx.translate(position.X * size, position.Y * size);
-        ctx.rotate(entity.angle);
-        ctx.fillStyle = "#999999";
-        ctx.fillRect(-1, -1, 10, 2);
-
-        // Reset ctx
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-    }
-
+    // Projectiles
     for(const i in projectiles){
         let projectile = projectiles[i];
         let position = projectile.position;
@@ -187,15 +189,44 @@ function draw(){
         // Reset ctx
         ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
+
+    // Entities
+    for(const i in entities){
+        let entity = entities[i];
+        let position = entity.position;
+        let hitbox = entity.hitbox;
+        let hitboxHalf = entity.hitboxHalf;
+
+        // Body
+        ctx.fillStyle = entity.colour;
+        ctx.fillRect((position.X - hitboxHalf.X) * size , (position.Y - hitboxHalf.Y) * size, hitbox.X * size, hitbox.Y * size);
+
+        // Turrets
+        ctx.translate(position.X * size, position.Y * size);
+        ctx.rotate(entity.angle);
+        ctx.fillStyle = "#777777";
+        if(entity instanceof ClusterEnemy){
+            ctx.fillRect(-0.1 * size, -0.25 * size, 1 * size, 0.5 * size );
+        }
+        else{
+            ctx.fillRect(-0.1 * size, -0.1 * size, 1 * size, 0.2 * size );
+        }
+
+        // Reset ctx
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Instructions
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillText("Movement - WASD", 10, 20); 
+        ctx.fillText("Fire - Left Click", 10, 40); 
+        ctx.fillText("Reset - Space", 10, 60); 
+    }
 }
 
 // ============================================================================================================================================= //
 //   ENTITIES
 // ============================================================================================================================================= //
-
-function getHitboxHalf(size){
-    return 
-}
 
 class Entity {
     constructor(posX, posY){
@@ -419,10 +450,26 @@ class LargeEnemy extends Enemy{
     }
 }
 
+class ClusterEnemy extends Enemy{
+    constructor(posX, posY){
+        super(posX, posY);
+        this._health = 5;
+        this._colour = "rgba(200, 100, 0, ";
+        this._cooldown = 30;
+    }
+    update(){
+        this.changeAngle();
+        if(this._cooldown == 0){
+            projectiles.push(new ClusterProjectile(this, player.position));
+            this._cooldown = 50;
+        }
+        super.update();
+    }
+}
+
 // ============================================================================================================================================= //
 //   PROJECTILES
 // ============================================================================================================================================= //
-
 class Projectile extends Entity {
     constructor(shotBy, shotTo, speed = 0.5){
         super(shotBy.position.X, shotBy.position.Y);
@@ -430,14 +477,19 @@ class Projectile extends Entity {
         this._cooldown = 125;
         this._colour = "rgba(255, 255, 0, ";
         this.setHitbox(0.2, 0.2);
+        this._damage = 1;
+
         let unitVector = normalizeVector(getVector(shotBy.position, shotTo))
         this._momentum = {X: unitVector.X * speed, Y: unitVector.Y * speed};
         this._angle = findAngleFromUnitVector(unitVector);
     }
+    getAngleFromMomentum(){
+        this._angle = findAngleFromUnitVector(normalizeVector(this._momentum));
+    }
     update(){
         if(this._cooldown <= 0){
             this._removed = true;
-            return false;
+            return null;
         }
 
         // Check entity collisions first
@@ -459,7 +511,7 @@ class Projectile extends Entity {
 
         // If collided with an entity
         if(collided != null){
-            collided.damage(1);
+            collided.damage(this._damage);
             this._removed = true;
             return collided;
         }
@@ -473,18 +525,18 @@ class Projectile extends Entity {
 }
 
 class BouncingProjectile extends Projectile {
-    constructor(shotBy, shotTo){
-        super(shotBy, shotTo, 0.7);
+    constructor(shotBy, shotTo, speed = 0.7){
+        super(shotBy, shotTo, speed);
         this.setHitbox(0.4, 0.4);
-        this._bounceTimes = 3;
+        this._bounceTimes = 4;
+        this._damage = 2;
     }
     update(){
         let hit = super.update();
 
         if(this._bounceTimes > 0 && (hit == true || hit == false)){
             this._bounceTimes--;
-            this._removed = false;
-            
+            this._removed = false;  
             if(hit == true){
                 // Bounce vertically
                 this._momentum.Y = -this._momentum.Y;
@@ -493,6 +545,54 @@ class BouncingProjectile extends Projectile {
                 // Bounce horizontally
                 this._momentum.X = -this._momentum.X;
             }
+            this.getAngleFromMomentum();
+        }
+    }
+}
+
+class MiniBouncingProjectile extends BouncingProjectile {
+    constructor(shotBy, shotTo, shotFrom){
+        super(shotBy, shotTo, 0.4);
+        this._originEntity = shotFrom;
+        this.setHitbox(0.2, 0.2);
+        this._bounceTimes = 2;
+        this._damage = 1;
+        this._cooldown = 50;
+    }
+}
+
+const CLUSTER_VARIATION = 0.2;
+const CLUSTER_VARIATION_2 = CLUSTER_VARIATION * 2;
+class ClusterProjectile extends BouncingProjectile {
+    constructor(shotBy, shotTo){
+        super(shotBy, shotTo, 0.4);
+        this.setHitbox(0.3, 0.3);
+        this._cooldown = 25;
+        this._damage = 2;
+        this._bounceTimes = 10;
+    }
+    createNewCluster(m){
+        projectiles.push(new MiniBouncingProjectile(this, {
+            X: this._position.X + m.X,
+            Y: this._position.Y + m.Y,
+        }, this._originEntity)); 
+    }
+    update(){
+        // // this._angle = (this._angle + Math.PI) % TAU; // Tau == 2π
+        let hit = super.update();
+        
+        if (hit == true)
+            this._momentum.X = 0 - this._momentum.X;
+        else if(hit == false) 
+            this._momentum.Y = 0 - this._momentum.Y;
+
+        if (this._removed){
+            console.log(hit);
+            this.createNewCluster(findUnitVectorFromAngle(this._angle + CLUSTER_VARIATION_2));
+            this.createNewCluster(findUnitVectorFromAngle(this._angle + CLUSTER_VARIATION));
+            this.createNewCluster(findUnitVectorFromAngle(this._angle));
+            this.createNewCluster(findUnitVectorFromAngle(this._angle - CLUSTER_VARIATION));
+            this.createNewCluster(findUnitVectorFromAngle(this._angle - CLUSTER_VARIATION_2));
         }
     }
 }
@@ -544,9 +644,6 @@ document.addEventListener("keydown", (e) => {
         case "w":
             movement[0] = 1;
             break;
-        case " ":
-            paused = true;
-            break;
         default:
             break;
     }
@@ -567,7 +664,7 @@ document.addEventListener("keyup", (e) => {
             movement[0] = 0;
             break;
         case " ":
-            paused = false;
+            start();
             break;
         default:
             break;
@@ -586,9 +683,18 @@ game.addEventListener("mouseup", e => {
     firing = false;
 });
 
+window.onresize = () =>{
+    game.height = window.innerHeight;
+    game.width = window.innerWidth;
+};
+
 // ============================================================================================================================================= //
 //   RUNNING
 // ============================================================================================================================================= //
+game.height = window.innerHeight;
+game.width = window.innerWidth;
+
 
 start();
 draw();
+

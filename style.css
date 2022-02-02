@@ -3,6 +3,10 @@
     overflow: hidden;
 }
 
+p {
+    position: fixed;
+}
+
 body{
     background-color: black;
 }
