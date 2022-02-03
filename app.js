@@ -185,19 +185,22 @@ function start(){
 // ============================================================================================================================================= //
 
 let size = 20;
-let ctx = game.getContext("2d");
+let canvas = game.getContext("2d");
 const HEALTHBAR_HEIGHT = 5;
 
 function draw(){
+
+    // Clear canvas
+    canvas.clearRect(0, 0, game.width, game.height);
 
     // World
     for(let x = 0; x < world.length; x++){
         if(world[x] != null){
             for(let y = 0; y < world.length; y++){
                 if(world[x][y] == 1){
-                    ctx = game.getContext("2d");
-                    ctx.fillStyle = "#DDDDDD";
-                    ctx.fillRect(x * size, y * size, size, size);
+                    canvas = game.getContext("2d");
+                    canvas.fillStyle = "#DDDDDD";
+                    canvas.fillRect(x * size, y * size, size, size);
                 }
             }
         }
@@ -209,13 +212,13 @@ function draw(){
         let position = projectile.position;
         let hitbox = projectile.hitbox;
         let hitboxHalf = projectile.hitboxHalf;
-        ctx.translate(position.X * size, position.Y * size);
-        ctx.rotate(projectile.angle);
-        ctx.fillStyle = projectile.colour;
-        ctx.fillRect(-hitboxHalf.X * size , -hitboxHalf.Y * size, hitbox.X * size, hitbox.Y * size);
+        canvas.translate(position.X * size, position.Y * size);
+        canvas.rotate(projectile.angle);
+        canvas.fillStyle = projectile.colour;
+        canvas.fillRect(-hitboxHalf.X * size , -hitboxHalf.Y * size, hitbox.X * size, hitbox.Y * size);
 
         // Reset ctx
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        canvas.setTransform(1, 0, 0, 1, 0, 0);
     }
 
     // Entities
@@ -227,40 +230,42 @@ function draw(){
         let xSize = entity.hitbox.X * size;
         let ySize = entity.hitbox.Y * size
         // Body
-        ctx.fillStyle = entity.colour;
-        ctx.fillRect(x, y, xSize, ySize);
+        canvas.fillStyle = entity.colour;
+        canvas.fillRect(x, y, xSize, ySize);
 
         // Healthbar
-        let healthbarOffset = y - 10
-        let healthPercentage = (1 / entity.maxHealth) * entity.health
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(x - 1, healthbarOffset - 1, xSize + 2, HEALTHBAR_HEIGHT + 2);
+        if(entity._showHealthbar){
+            let healthbarOffset = y - 10
+            let healthPercentage = (1 / entity.maxHealth) * entity.health
+            canvas.fillStyle = "#000000";
+            canvas.fillRect(x - 1, healthbarOffset - 1, xSize + 2, HEALTHBAR_HEIGHT + 2);
 
-        ctx.fillStyle = "#FF0000";
-        ctx.fillRect(x, healthbarOffset, xSize, HEALTHBAR_HEIGHT);
-        ctx.fillStyle = "#00FF00";
-        ctx.fillRect(x, healthbarOffset, xSize * healthPercentage, HEALTHBAR_HEIGHT);
+            canvas.fillStyle = "#FF0000";
+            canvas.fillRect(x, healthbarOffset, xSize, HEALTHBAR_HEIGHT);
+            canvas.fillStyle = "#00FF00";
+            canvas.fillRect(x, healthbarOffset, xSize * healthPercentage, HEALTHBAR_HEIGHT);
+        }
 
         // Turrets
-        ctx.translate(entity.position.X * size, entity.position.Y * size);
-        ctx.rotate(entity.angle);
-        ctx.fillStyle = "#777777";
+        canvas.translate(entity.position.X * size, entity.position.Y * size);
+        canvas.rotate(entity.angle);
+        canvas.fillStyle = "#777777";
         if(entity instanceof ClusterEnemy){
-            ctx.fillRect(-0.1 * size, -0.25 * size, 1 * size, 0.5 * size );
+            canvas.fillRect(-0.1 * size, -0.25 * size, 1 * size, 0.5 * size );
         }
         else{
-            ctx.fillRect(-0.1 * size, -0.1 * size, 1 * size, 0.2 * size );
+            canvas.fillRect(-0.1 * size, -0.1 * size, 1 * size, 0.2 * size );
         }
 
         // Reset ctx
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        canvas.setTransform(1, 0, 0, 1, 0, 0);
 
         // Instructions
-        ctx.font = "20px Arial";
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillText("Movement - WASD", 10, 20); 
-        ctx.fillText("Fire - Left Click", 10, 40); 
-        ctx.fillText("Reset - Space", 10, 60); 
+        canvas.font = "20px Arial";
+        canvas.fillStyle = "#FFFFFF";
+        canvas.fillText("Movement - WASD", 10, 20); 
+        canvas.fillText("Fire - Left Click", 10, 40); 
+        canvas.fillText("Reset - Space", 10, 60); 
     }
 }
 
@@ -279,6 +284,7 @@ class Entity {
         this._colour = "rgba(255, 255, 255, "; // the rest of the rgba string is provided in the get method
         this._cooldown = 0; // Used for character firing reloading or projectile timeout
         this._isHit = 0;
+        this._showHealthbar = 0;
     }
     setHealth(hp){
         this._health = hp;
@@ -296,6 +302,7 @@ class Entity {
         if(this._removed) return;
         if(this._cooldown > 0) this._cooldown--;
         if(this._isHit > 0) this._isHit--;
+        if(this._showHealthbar > 0) this._showHealthbar--;
 
         // Position + Momentum * lastUpdate.Milliseconds;
         // Update entity position
@@ -311,8 +318,6 @@ class Entity {
 
         let x = Math.floor(newEntityHitboxTopLeftCorner.X);
         let y = Math.floor(newEntityHitboxTopLeftCorner.Y);
-        // console.log("X Range: " + Math.floor(newEntityHitboxTopLeftCorner.X), Math.floor(newEntityHitboxTopLeftCorner.X + this._hitbox.X - 0.0001));
-        // console.log("Y Range: " + Math.floor(newEntityHitboxTopLeftCorner.Y), Math.floor(newEntityHitboxTopLeftCorner.Y + this._hitbox.Y - 0.0001));
 
         // Use do loops instead of for loops
         // To ensure for loops run at least once to ensure collision detection always happens,
@@ -403,6 +408,8 @@ class Entity {
         this._health -= value;
         if(this._health <= 0)
             this._removed = true;
+        else
+            this._showHealthbar = 75;
     }
     setHitbox(x, y){
         this._hitbox = new Vector2(x, y);
@@ -410,6 +417,9 @@ class Entity {
     }
     get position(){
         return this._position;
+    }
+    get healthbar(){
+        return this._showHealthbar > 0;
     }
     get hitboxHalf(){
         return this._hitboxHalf;
@@ -571,7 +581,7 @@ class Projectile extends Entity {
 }
 
 class BouncingProjectile extends Projectile {
-    constructor(shotBy, shotTo, speed = 0.7){
+    constructor(shotBy, shotTo, speed = 0.5){
         super(shotBy, shotTo, speed);
         this.setHitbox(0.4, 0.4);
         this._bounceTimes = 4;
@@ -652,9 +662,6 @@ function iterate(item){
 
 function update(e){
     if (paused) return;
-    // Clear drawing area
-    const context = game.getContext('2d');
-    context.clearRect(0, 0, game.width, game.height);
 
     // Going backwards through the list to allow removing from the list mid-loop
     for(let i = entities.length - 1; i >= 0; i--){
