@@ -1,4 +1,71 @@
 // ============================================================================================================================================= //
+//   2D MATHS
+// ============================================================================================================================================= //
+
+class Vector2{
+    constructor(X, Y){
+        this._x = X;
+        this._y = Y;
+        this._magnitude = Vector2.calculateMagnitude(this);
+    }
+    get X() {
+        return this._x;
+    }
+    get Y() {
+        return this._y;
+    }
+    set X(x) {
+        this._x = x;
+        this._magnitude = Vector2.calculateMagnitude(this);
+    }
+    set Y(y) {
+        this._y = y;
+        this._magnitude = Vector2.calculateMagnitude(this);
+    }
+    get magnitude(){
+        return this._magnitude;
+    }
+    normalize(){ // Use if you want to normalize the parameter (returns normalized vector)
+        if(this._magnitude != 0){
+            this._x /= this._magnitude;
+            this._y /= this._magnitude;
+        }
+        return this;
+    }
+    static normalize(vector2){ // Use if you don't want to normalize the parameter (returns normalized copy of vector)
+        if(vector2.magnitude != 0){
+            return new Vector2(vector2.X / vector2.magnitude, vector2.Y / vector2.magnitude);
+        }
+        return vector2;
+    }
+    static calculateMagnitude(vector2){
+        return Math.sqrt((vector2.X * vector2.X) + (vector2.Y * vector2.Y));
+    }
+    // Not sure what the name of this action is
+    static between(firstVector2, secondVector2){
+        return new Vector2(secondVector2.X - firstVector2.X, secondVector2.Y - firstVector2.Y);
+    }
+    static add(firstVector2, secondVector2){
+        return new Vector2(firstVector2.X + secondVector2.X , firstVector2.Y + secondVector2.Y);
+    }
+    toString(){
+        return "{ " + this._x + ", " + this._y + " }";
+    }
+}
+
+function findAngleFromUnitVector(unitVector){
+    return HALFPI + (unitVector.X < 0 ? Math.acos(unitVector.Y) : -Math.acos(unitVector.Y));
+}
+
+function findAngle(pos1, pos2){
+    return findAngleFromUnitVector(Vector2.between(pos1, pos2).normalize());
+}
+
+function findUnitVectorFromAngle(angle){
+    return new Vector2(-Math.sin(angle - HALFPI), Math.cos(angle - HALFPI));
+}
+
+// ============================================================================================================================================= //
 //   GENERAL VARIABLES AND FUNCTIONS
 // ============================================================================================================================================= //
 
@@ -13,7 +80,7 @@ const HALFPI = Math.PI / 2;
 const TAU = Math.PI * 2;
 
 let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
-let mousePos = {X: 0, Y: 0};
+let mousePos = new Vector2(0, 0);
 let player = null;
 let firing = false;
 
@@ -24,45 +91,6 @@ function togglePause(){
 function round(num)
 {
     return (Math.round(num * 1000) / 1000) + 0.0;
-}
-
-// ============================================================================================================================================= //
-//   2D MATHS
-// ============================================================================================================================================= //
-
-function getVector(pos1, pos2){
-    return {
-        X: pos2.X - pos1.X,
-        Y: pos2.Y - pos1.Y
-    };
-}
-
-function getMagnitude(vector){
-    // Find the magnitude (distance travelled between the two points)
-    // a^2 + b^2 = c^2
-    return Math.sqrt((vector.X * vector.X) + (vector.Y * vector.Y));
-}
-
-function normalizeVector(vector){
-    // Normalize to turn into a unit vector (length of 1 with same angle)
-    // Divide by the magnitude
-    let magnitude = getMagnitude(vector);
-    return {
-        X: vector.X / magnitude,
-        Y: vector.Y / magnitude
-    }
-}
-
-function findAngleFromUnitVector(unitVector){
-    return HALFPI + (unitVector.X < 0 ? Math.acos(unitVector.Y) : -Math.acos(unitVector.Y));
-}
-
-function findAngle(pos1, pos2){
-    return findAngleFromUnitVector(normalizeVector(getVector(pos1, pos2)));
-}
-
-function findUnitVectorFromAngle(angle){
-    return {X: -Math.sin(angle - HALFPI), Y: Math.cos(angle - HALFPI)}
 }
 
 // ============================================================================================================================================= //
@@ -158,7 +186,7 @@ function start(){
 
 let size = 20;
 let ctx = game.getContext("2d");
-
+const HEALTHBAR_HEIGHT = 5;
 
 function draw(){
 
@@ -193,16 +221,28 @@ function draw(){
     // Entities
     for(const i in entities){
         let entity = entities[i];
-        let position = entity.position;
-        let hitbox = entity.hitbox;
-        let hitboxHalf = entity.hitboxHalf;
 
+        let x = (entity.position.X - entity.hitboxHalf.X) * size;
+        let y = (entity.position.Y - entity.hitboxHalf.Y) * size;
+        let xSize = entity.hitbox.X * size;
+        let ySize = entity.hitbox.Y * size
         // Body
         ctx.fillStyle = entity.colour;
-        ctx.fillRect((position.X - hitboxHalf.X) * size , (position.Y - hitboxHalf.Y) * size, hitbox.X * size, hitbox.Y * size);
+        ctx.fillRect(x, y, xSize, ySize);
+
+        // Healthbar
+        let healthbarOffset = y - 10
+        let healthPercentage = (1 / entity.maxHealth) * entity.health
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(x - 1, healthbarOffset - 1, xSize + 2, HEALTHBAR_HEIGHT + 2);
+
+        ctx.fillStyle = "#FF0000";
+        ctx.fillRect(x, healthbarOffset, xSize, HEALTHBAR_HEIGHT);
+        ctx.fillStyle = "#00FF00";
+        ctx.fillRect(x, healthbarOffset, xSize * healthPercentage, HEALTHBAR_HEIGHT);
 
         // Turrets
-        ctx.translate(position.X * size, position.Y * size);
+        ctx.translate(entity.position.X * size, entity.position.Y * size);
         ctx.rotate(entity.angle);
         ctx.fillStyle = "#777777";
         if(entity instanceof ClusterEnemy){
@@ -231,14 +271,18 @@ function draw(){
 class Entity {
     constructor(posX, posY){
         this.setHitbox(0.75, 0.75);
-        this._momentum = {X: 0.0, Y: 0.0};
-        this._position = {X: posX, Y: posY};
+        this._momentum = new Vector2(0.0, 0.0);
+        this._position = new Vector2(posX, posY);
         this._angle = 0;
-        this._health = 0;
+        this.setHealth(0);
         this._removed = false;
         this._colour = "rgba(255, 255, 255, "; // the rest of the rgba string is provided in the get method
         this._cooldown = 0; // Used for character firing reloading or projectile timeout
         this._isHit = 0;
+    }
+    setHealth(hp){
+        this._health = hp;
+        this._maxHealth = hp;
     }
     update(){
         // The update method returns a value based off of what was hit and from what direction.
@@ -253,18 +297,15 @@ class Entity {
         if(this._cooldown > 0) this._cooldown--;
         if(this._isHit > 0) this._isHit--;
 
-        //Vector2 newPosition = Position + Momentum * lastUpdate.Milliseconds;
+        // Position + Momentum * lastUpdate.Milliseconds;
         // Update entity position
-        let newPosition = {
-            X: this._position.X + this._momentum.X, 
-            Y: this._position.Y + this._momentum.Y
-        };
+        let newPosition = Vector2.add(this._position, this._momentum);
 
-        let oldEntityHitboxTopLeftCorner = {X: this._position.X - this._hitboxHalf.X, Y: this._position.Y - this._hitboxHalf.Y};
-        let newEntityHitboxTopLeftCorner = {X: newPosition.X - this._hitboxHalf.X, Y: newPosition.Y - this._hitboxHalf.Y};
+        let oldEntityHitboxTopLeftCorner = new Vector2(this._position.X - this._hitboxHalf.X, this._position.Y - this._hitboxHalf.Y);
+        let newEntityHitboxTopLeftCorner = new Vector2(newPosition.X - this._hitboxHalf.X, newPosition.Y - this._hitboxHalf.Y);
         
         //*/
-        let overlapTile = {X: 0, Y: 0};
+        let overlapTile = new Vector2(0, 0);
         let overlapCount = 0;
         let edgeCase = false;
 
@@ -292,7 +333,7 @@ class Entity {
                 if (read(x, y) == 1)
                 {
                     // overlapTile might need to be used for positioning the entity correctly during an edge case.
-                    overlapTile = {X: x, Y: y};
+                    overlapTile = new Vector2(x, y);
                     // overlapCount keeps track of how many obstacles have been hit, used for the edge case code.
                     overlapCount++;
                     
@@ -329,10 +370,10 @@ class Entity {
         //      the edge case only occurs when approaching the corner of one obstacle diagonally.
         if (edgeCase && overlapCount == 1)
         {
-            let travelDistance = {
-                X: newEntityHitboxTopLeftCorner.X - oldEntityHitboxTopLeftCorner.X,
-                Y: newEntityHitboxTopLeftCorner.Y - oldEntityHitboxTopLeftCorner.Y
-            }
+            let travelDistance = new Vector2(
+                newEntityHitboxTopLeftCorner.X - oldEntityHitboxTopLeftCorner.X,
+                newEntityHitboxTopLeftCorner.Y - oldEntityHitboxTopLeftCorner.Y
+            );
             if (Math.abs(travelDistance.X) > Math.abs(travelDistance.Y))
             {
                 // More horizontal movement
@@ -352,7 +393,7 @@ class Entity {
                     newPosition.Y = overlapTile.Y + this._hitboxHalf.Y + 1;
             }
         }
-        this._position = {X: round(newPosition.X), Y: round(newPosition.Y)};
+        this._position = new Vector2(round(newPosition.X), round(newPosition.Y));
 
         // Returns true if entity hit a wall
         return hitFace;
@@ -364,8 +405,8 @@ class Entity {
             this._removed = true;
     }
     setHitbox(x, y){
-        this._hitbox = {X: x, Y: y};
-        this._hitboxHalf = {X: x / 2, Y: y / 2};
+        this._hitbox = new Vector2(x, y);
+        this._hitboxHalf = new Vector2(x / 2, y / 2);
     }
     get position(){
         return this._position;
@@ -385,20 +426,23 @@ class Entity {
     get removed(){
         return this._removed;
     }
+    get health(){
+        return this._health;
+    }
+    get maxHealth(){
+        return this._maxHealth;
+    }
 }
 
 class Player extends Entity {
     constructor(posX, posY){
         super(posX, posY);
-        this._momentum = {X: 0, Y: 0};
-        this._health = 10;
+        this._momentum = new Vector2(0, 0);
+        this.setHealth(10);
         this._colour = "rgba(0, 200, 0, ";
     }
     update(){
-        this._momentum = {
-            X: (movement[2] - movement[3]) / 5,
-            Y: (movement[1] - movement[0]) / 5
-        }
+        this._momentum = new Vector2((movement[2] - movement[3]) / 5, (movement[1] - movement[0]) / 5);
         this._angle = findAngle(this._position, mousePos);
 
         super.update();
@@ -413,7 +457,7 @@ class Player extends Entity {
 class Enemy extends Entity {
     constructor(posX, posY){
         super(posX, posY);
-        this._health = 5;
+        this.setHealth(5);
         this._colour = "rgba(255, 0, 0, ";
         this._cooldown = 50;
     }
@@ -435,7 +479,7 @@ class Enemy extends Entity {
 class LargeEnemy extends Enemy{
     constructor(posX, posY){
         super(posX, posY);
-        this._health = 10;
+        this.setHealth(10);
         this._colour = "rgba(150, 0, 0, ";
         this._cooldown = 50;
         this.setHitbox(1, 1);
@@ -453,7 +497,7 @@ class LargeEnemy extends Enemy{
 class ClusterEnemy extends Enemy{
     constructor(posX, posY){
         super(posX, posY);
-        this._health = 5;
+        this.setHealth(5);
         this._colour = "rgba(200, 100, 0, ";
         this._cooldown = 30;
     }
@@ -479,12 +523,14 @@ class Projectile extends Entity {
         this.setHitbox(0.2, 0.2);
         this._damage = 1;
 
-        let unitVector = normalizeVector(getVector(shotBy.position, shotTo))
-        this._momentum = {X: unitVector.X * speed, Y: unitVector.Y * speed};
+        
+        //let unitVector = normalizeVector(getVector(shotBy.position, shotTo))
+        let unitVector = Vector2.between(shotBy.position, shotTo).normalize();
+        this._momentum = new Vector2(unitVector.X * speed, unitVector.Y * speed);
         this._angle = findAngleFromUnitVector(unitVector);
     }
     getAngleFromMomentum(){
-        this._angle = findAngleFromUnitVector(normalizeVector(this._momentum));
+        this._angle = findAngleFromUnitVector(Vector2.normalize(this._momentum));
     }
     update(){
         if(this._cooldown <= 0){
@@ -572,22 +618,19 @@ class ClusterProjectile extends BouncingProjectile {
         this._bounceTimes = 10;
     }
     createNewCluster(m){
-        projectiles.push(new MiniBouncingProjectile(this, {
-            X: this._position.X + m.X,
-            Y: this._position.Y + m.Y,
-        }, this._originEntity)); 
+        projectiles.push(new MiniBouncingProjectile(this, new Vector2(
+            this._position.X + m.X,
+            this._position.Y + m.Y,
+        ), this._originEntity)); 
     }
     update(){
-        // // this._angle = (this._angle + Math.PI) % TAU; // Tau == 2π
         let hit = super.update();
-        
         if (hit == true)
-            this._momentum.X = 0 - this._momentum.X;
+            this._momentum.X = -this._momentum.X;
         else if(hit == false) 
-            this._momentum.Y = 0 - this._momentum.Y;
+            this._momentum.Y = -this._momentum.Y;
 
         if (this._removed){
-            console.log(hit);
             this.createNewCluster(findUnitVectorFromAngle(this._angle + CLUSTER_VARIATION_2));
             this.createNewCluster(findUnitVectorFromAngle(this._angle + CLUSTER_VARIATION));
             this.createNewCluster(findUnitVectorFromAngle(this._angle));
@@ -672,7 +715,7 @@ document.addEventListener("keyup", (e) => {
 });
 
 game.addEventListener("mousemove", e => {
-    mousePos = {X: e.layerX / size, Y: e.layerY / size};
+    mousePos = new Vector2(e.layerX / size, e.layerY / size);
 });
 
 game.addEventListener("mousedown", e => {
@@ -694,7 +737,5 @@ window.onresize = () =>{
 game.height = window.innerHeight;
 game.width = window.innerWidth;
 
-
 start();
 draw();
-
