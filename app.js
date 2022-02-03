@@ -41,8 +41,7 @@ class Vector2{
     static calculateMagnitude(vector2){
         return Math.sqrt((vector2.X * vector2.X) + (vector2.Y * vector2.Y));
     }
-    // Not sure what the name of this action is
-    static between(firstVector2, secondVector2){
+    static subtract(firstVector2, secondVector2){
         return new Vector2(secondVector2.X - firstVector2.X, secondVector2.Y - firstVector2.Y);
     }
     static add(firstVector2, secondVector2){
@@ -58,11 +57,91 @@ function findAngleFromUnitVector(unitVector){
 }
 
 function findAngle(pos1, pos2){
-    return findAngleFromUnitVector(Vector2.between(pos1, pos2).normalize());
+    return findAngleFromUnitVector(Vector2.subtract(pos1, pos2).normalize());
 }
 
 function findUnitVectorFromAngle(angle){
     return new Vector2(-Math.sin(angle - HALFPI), Math.cos(angle - HALFPI));
+}
+
+function findBlockFromRay(start, finish, findClosest = false){
+    let rayVector = Vector2.subtract(start, finish);
+    /*
+    Divide both X and Y by X and Y
+    {50, 25}
+    yRatio = 25 / 50 = 0.5
+    xRatio = 50 / 25 = 2
+
+    Iterate through X:
+    Find which Y is at X
+    Y = startY + (yRatio * X)
+    Check +X and -X
+
+    Iterate through Y
+    Find which X is at Y
+    X = startX + (xRatio * Y)
+    Check +Y and -Y
+    */
+
+    // If the line goes like \, calculate the values from the lower position.
+    // If the lines goes /, calculate the values from the upper position.
+    let startLower = (rayVector.X < 0 && rayVector.Y < 0 || rayVector.X > 0 && rayVector.Y > 0)
+
+    let hitPoints = [];
+    let xRatio = rayVector.X / rayVector.Y;
+    let yRatio = rayVector.Y / rayVector.X;
+    let lowerPos = new Vector2(Math.ceil(Math.min(start.X, finish.X)), Math.ceil(Math.min(start.Y, finish.Y)));
+    let upperPos = new Vector2(Math.floor(Math.max(start.X, finish.X)), Math.floor(Math.max(start.Y, finish.Y)));
+
+    /*
+    console.log("Start = " + start);
+    console.log("Finish = " + finish);
+    console.log("RayVector = " + rayVector);
+    console.log("LowerPos = " + lowerPos);
+    console.log("UpperPos = " + upperPos);
+    */
+
+    for(let x = 0; x < upperPos.X - lowerPos.X; x++){
+        let y = (startLower ? lowerPos.Y : upperPos.Y) + (yRatio * x);
+        let offsetX = Math.floor(lowerPos.X) + x;
+        if(read(offsetX, Math.floor(y)) != null)
+            hitPoints.push(new Vector2(offsetX, y));
+
+        if(read(offsetX - 1, Math.floor(y)) != null)
+            hitPoints.push(new Vector2(offsetX - 1, y));
+
+    }
+
+    for(let y = 0; y < upperPos.Y - lowerPos.Y; y++){
+        let x = (startLower ? lowerPos.X : upperPos.X) + (xRatio * y);
+        let offsetY = Math.floor(lowerPos.Y) + y;
+        if(read(Math.floor(x), offsetY) != null)
+            hitPoints.push(new Vector2(x, offsetY));
+
+        if(read(Math.floor(x), offsetY - 1) != null)
+            hitPoints.push(new Vector2(x, offsetY - 1));
+
+    }
+    
+    if(!findClosest){
+        return hitPoints.length > 0;
+    }
+    else if(hitPoints.length > 0){ // This doesn't work yet
+        //console.log(hitPoints.length);
+        let closest = hitPoints[0];
+        let closestMagnitude = Vector2.subtract(closest, start).magnitude;
+        for(let i = 1; i < hitPoints.length; i++){
+            let checkingMagnitude = Vector2.subtract(hitPoints[i], start).magnitude;
+            if(checkingMagnitude < closestMagnitude){
+                closestMagnitude = checkingMagnitude;
+                closest = hitPoints[i];
+            }
+        }
+        return closest;
+    }
+    else{
+        return null;
+    }
 }
 
 // ============================================================================================================================================= //
@@ -88,8 +167,7 @@ function togglePause(){
     paused = !paused;
 }
 
-function round(num)
-{
+function round(num){
     return (Math.round(num * 1000) / 1000) + 0.0;
 }
 
@@ -169,13 +247,16 @@ function start(){
 
     placeHorizontal(22, 37, 47, 1);
 
-    player = new Player(20, 20);
-    entities.push(player);
-
     entities.push(new Enemy(12, 28));
     entities.push(new Enemy(26.8, 25));
     entities.push(new LargeEnemy(21.2, 13.6));
+    entities.push(new LargeEnemy(47.2, 14.1));
     entities.push(new ClusterEnemy(47, 27));
+
+    player = new Player(20, 20);
+    entities.push(player);
+
+    place(10, 10, 1);
 
     game.interval = setInterval(update, 20);
 }
@@ -266,6 +347,7 @@ function draw(){
         canvas.fillText("Movement - WASD", 10, 20); 
         canvas.fillText("Fire - Left Click", 10, 40); 
         canvas.fillText("Reset - Space", 10, 60); 
+        canvas.fillText("Pause - P", 10, 80); 
     }
 }
 
@@ -476,12 +558,15 @@ class Enemy extends Entity {
     }
     update(){
         this.changeAngle();
-        if(this._cooldown == 0){
-            projectiles.push(new Projectile(this, player.position));
-            this._cooldown = 25;
+        if(!findBlockFromRay(this._position, player.position)){
+            if(this._cooldown <= 0){
+                projectiles.push(new Projectile(this, player.position));
+                this._cooldown = 25;
+            }
         }
-        // Pathfind (?)
-        // Line of sight (?)
+        else{
+            // Move
+        }
         super.update();
     }
 }
@@ -496,9 +581,14 @@ class LargeEnemy extends Enemy{
     }
     update(){
         this.changeAngle();
-        if(this._cooldown == 0){
-            projectiles.push(new BouncingProjectile(this, player.position));
-            this._cooldown = 50;
+        if(!findBlockFromRay(this._position, player.position)){
+            if(this._cooldown <= 0){
+                projectiles.push(new BouncingProjectile(this, player.position));
+                this._cooldown = 50;
+            }
+        }
+        else{
+            // MOVE
         }
         super.update();
     }
@@ -513,9 +603,14 @@ class ClusterEnemy extends Enemy{
     }
     update(){
         this.changeAngle();
-        if(this._cooldown == 0){
-            projectiles.push(new ClusterProjectile(this, player.position));
-            this._cooldown = 50;
+        if(!findBlockFromRay(this._position, player.position)){
+            if(this._cooldown <= 0){
+                projectiles.push(new ClusterProjectile(this, player.position));
+                this._cooldown = 50;
+            }
+        }
+        else{
+            // MOVE
         }
         super.update();
     }
@@ -532,10 +627,9 @@ class Projectile extends Entity {
         this._colour = "rgba(255, 255, 0, ";
         this.setHitbox(0.2, 0.2);
         this._damage = 1;
-
         
         //let unitVector = normalizeVector(getVector(shotBy.position, shotTo))
-        let unitVector = Vector2.between(shotBy.position, shotTo).normalize();
+        let unitVector = Vector2.subtract(shotBy.position, shotTo).normalize();
         this._momentum = new Vector2(unitVector.X * speed, unitVector.Y * speed);
         this._angle = findAngleFromUnitVector(unitVector);
     }
@@ -680,6 +774,7 @@ function update(e){
 //   EVENT LISTENERS
 // ============================================================================================================================================= //
 
+let pauseDebounce = false;
 document.addEventListener("keydown", (e) => {
     switch(e.key){
         case "d":
@@ -693,6 +788,12 @@ document.addEventListener("keydown", (e) => {
             break;
         case "w":
             movement[0] = 1;
+            break;
+        case "p":
+            if(!pauseDebounce){
+                pauseDebounce = true;
+                paused = !paused;
+            }
             break;
         default:
             break;
@@ -715,6 +816,9 @@ document.addEventListener("keyup", (e) => {
             break;
         case " ":
             start();
+            break;
+        case "p":
+            pauseDebounce = false;
             break;
         default:
             break;

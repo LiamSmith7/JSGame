@@ -1,12 +1,5 @@
 * {
+    background-color: #111111;
     margin: 0;
     overflow: hidden;
-}
-
-body{
-    background-color: black;
-}
-
-canvas{
-    background-color: #111111;
 }
