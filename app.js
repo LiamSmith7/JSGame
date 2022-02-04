@@ -64,8 +64,10 @@ function findUnitVectorFromAngle(angle){
     return new Vector2(-Math.sin(angle - HALFPI), Math.cos(angle - HALFPI));
 }
 
-function findBlockFromRay(start, finish, findClosest = false){
+function findPointFromRay(start, finish, test = false){
     let rayVector = Vector2.subtract(start, finish);
+
+    if(test) lines.push({x1: start.X, x2: start.X + rayVector.X, y1: start.Y, y2: start.Y + rayVector.Y});
     /*
     Divide both X and Y by X and Y
     {50, 25}
@@ -83,65 +85,53 @@ function findBlockFromRay(start, finish, findClosest = false){
     Check +Y and -Y
     */
 
-    // If the line goes like \, calculate the values from the lower position.
-    // If the lines goes /, calculate the values from the upper position.
-    let startLower = (rayVector.X < 0 && rayVector.Y < 0 || rayVector.X > 0 && rayVector.Y > 0)
-
-    let hitPoints = [];
+    // Line equation
     let xRatio = rayVector.X / rayVector.Y;
     let yRatio = rayVector.Y / rayVector.X;
-    let lowerPos = new Vector2(Math.ceil(Math.min(start.X, finish.X)), Math.ceil(Math.min(start.Y, finish.Y)));
-    let upperPos = new Vector2(Math.floor(Math.max(start.X, finish.X)), Math.floor(Math.max(start.Y, finish.Y)));
+    // Which direction the for loop travels
+    let xDirection = rayVector.X >= 0 ? 1: -1;
+    let yDirection = rayVector.Y >= 0 ? 1: -1;
+    // Aligning the start positions to the grid. Starting from 0 or 1 depending on which way the ray is facing
+    // (It's important, just trust it)
+    let xDif = (xDirection == 1 ? 0 : 1) - (start.X - Math.floor(start.X));
+    let yDif = (yDirection == 1 ? 0 : 1) - (start.Y - Math.floor(start.Y));
 
-    /*
-    console.log("Start = " + start);
-    console.log("Finish = " + finish);
-    console.log("RayVector = " + rayVector);
-    console.log("LowerPos = " + lowerPos);
-    console.log("UpperPos = " + upperPos);
-    */
+    let closestX = finish;
+    let closestY = finish;
 
-    for(let x = 0; x < upperPos.X - lowerPos.X; x++){
-        let y = (startLower ? lowerPos.Y : upperPos.Y) + (yRatio * x);
-        let offsetX = Math.floor(lowerPos.X) + x;
-        if(read(offsetX, Math.floor(y)) != null)
-            hitPoints.push(new Vector2(offsetX, y));
-
-        if(read(offsetX - 1, Math.floor(y)) != null)
-            hitPoints.push(new Vector2(offsetX - 1, y));
-
-    }
-
-    for(let y = 0; y < upperPos.Y - lowerPos.Y; y++){
-        let x = (startLower ? lowerPos.X : upperPos.X) + (xRatio * y);
-        let offsetY = Math.floor(lowerPos.Y) + y;
-        if(read(Math.floor(x), offsetY) != null)
-            hitPoints.push(new Vector2(x, offsetY));
-
-        if(read(Math.floor(x), offsetY - 1) != null)
-            hitPoints.push(new Vector2(x, offsetY - 1));
-
-    }
-    
-    if(!findClosest){
-        return hitPoints.length > 0;
-    }
-    else if(hitPoints.length > 0){ // This doesn't work yet
-        //console.log(hitPoints.length);
-        let closest = hitPoints[0];
-        let closestMagnitude = Vector2.subtract(closest, start).magnitude;
-        for(let i = 1; i < hitPoints.length; i++){
-            let checkingMagnitude = Vector2.subtract(hitPoints[i], start).magnitude;
-            if(checkingMagnitude < closestMagnitude){
-                closestMagnitude = checkingMagnitude;
-                closest = hitPoints[i];
-            }
+    // Since it checks from the start point, any further results after the first don't matter.
+    for(let x = xDirection + xDif; Math.abs(x) <= Math.abs(rayVector.X); x += xDirection){
+        let xOffset = start.X + x;
+        let yOffset = start.Y + (yRatio * x);
+        if(read(Math.floor(xOffset), Math.floor(yOffset))){    
+            closestX = new Vector2(xOffset, yOffset);
+            break;
         }
-        return closest;
+        else if(read(Math.floor(xOffset) - 1, Math.floor(yOffset))){
+            closestX = new Vector2(xOffset, yOffset);
+            break;
+        }
     }
-    else{
-        return null;
+
+    for(let y = yDirection + yDif; Math.abs(y) <= Math.abs(rayVector.Y); y += yDirection){
+        let xOffset = start.X + (xRatio * y);
+        let yOffset = start.Y + y;
+        if(read(Math.floor(xOffset), Math.floor(yOffset))){
+            closestY = new Vector2(xOffset, yOffset);
+            break;
+        }
+        else if(read(Math.floor(xOffset), Math.floor(yOffset) - 1)){
+            closestY = new Vector2(xOffset, yOffset);
+            break;
+        }
     }
+
+    // Checks the magnitude of the two found points and returns the one closest to the start
+    if(Vector2.subtract(closestX, start).magnitude < Vector2.subtract(closestY, start).magnitude)
+        return closestX;
+    else
+        return closestY;
+
 }
 
 // ============================================================================================================================================= //
@@ -154,6 +144,7 @@ let paused = true;
 let world = [];
 let entities = [];
 let projectiles = [];
+let lines = [];
 
 const HALFPI = Math.PI / 2;
 const TAU = Math.PI * 2;
@@ -215,6 +206,7 @@ function start(){
     // Clears the arrays
     entities.length = 0;
     projectiles.length = 0;
+    lines.length = 0;
 
     // Outer walls
     placeHorizontal(10, 10, 30, 1);
@@ -253,7 +245,7 @@ function start(){
     entities.push(new LargeEnemy(47.2, 14.1));
     entities.push(new ClusterEnemy(47, 27));
 
-    player = new Player(20, 20);
+    player = new Player(20.2, 21.99);
     entities.push(player);
 
     place(10, 10, 1);
@@ -311,8 +303,11 @@ function draw(){
         let xSize = entity.hitbox.X * size;
         let ySize = entity.hitbox.Y * size
         // Body
+
         canvas.fillStyle = entity.colour;
         canvas.fillRect(x, y, xSize, ySize);
+
+        if(entity instanceof Marker) continue;
 
         // Healthbar
         if(entity._showHealthbar){
@@ -340,15 +335,26 @@ function draw(){
 
         // Reset ctx
         canvas.setTransform(1, 0, 0, 1, 0, 0);
-
-        // Instructions
-        canvas.font = "20px Arial";
-        canvas.fillStyle = "#FFFFFF";
-        canvas.fillText("Movement - WASD", 10, 20); 
-        canvas.fillText("Fire - Left Click", 10, 40); 
-        canvas.fillText("Reset - Space", 10, 60); 
-        canvas.fillText("Pause - P", 10, 80); 
     }
+
+    canvas.strokeStyle = "yellow";
+    canvas.lineWidth = 1;
+    // Lines {x1: 0, x2: 0, y1: 0, y2: 0}
+    for(const i in lines){
+        let line = lines[i];
+        canvas.beginPath();
+        canvas.moveTo(line.x1 * size, line.y1 * size);
+        canvas.lineTo(line.x2 * size, line.y2 * size);
+        canvas.stroke();
+    }
+
+    // Instructions
+    canvas.font = "20px Arial";
+    canvas.fillStyle = "#FFFFFF";
+    canvas.fillText("Movement - WASD", 10, 20); 
+    canvas.fillText("Fire - Left Click", 10, 40); 
+    canvas.fillText("Reset - Space", 10, 60); 
+    canvas.fillText("Pause - P", 10, 80); 
 }
 
 // ============================================================================================================================================= //
@@ -526,6 +532,20 @@ class Entity {
     }
 }
 
+class Marker extends Entity{
+    constructor(posX, posY, colour = "blue"){
+        super(posX, posY);
+        this.setHitbox(0.4, 0.4);
+        this._colour = colour;
+    }
+    update(){
+        // Do nothing
+    }
+    get colour(){
+        return this._colour;
+    }
+}
+
 class Player extends Entity {
     constructor(posX, posY){
         super(posX, posY);
@@ -558,7 +578,7 @@ class Enemy extends Entity {
     }
     update(){
         this.changeAngle();
-        if(!findBlockFromRay(this._position, player.position)){
+        if(findPointFromRay(this._position, player.position) == player.position){
             if(this._cooldown <= 0){
                 projectiles.push(new Projectile(this, player.position));
                 this._cooldown = 25;
@@ -581,7 +601,7 @@ class LargeEnemy extends Enemy{
     }
     update(){
         this.changeAngle();
-        if(!findBlockFromRay(this._position, player.position)){
+        if(findPointFromRay(this._position, player.position) == player.position){
             if(this._cooldown <= 0){
                 projectiles.push(new BouncingProjectile(this, player.position));
                 this._cooldown = 50;
@@ -603,7 +623,7 @@ class ClusterEnemy extends Enemy{
     }
     update(){
         this.changeAngle();
-        if(!findBlockFromRay(this._position, player.position)){
+        if(findPointFromRay(this._position, player.position) == player.position){
             if(this._cooldown <= 0){
                 projectiles.push(new ClusterProjectile(this, player.position));
                 this._cooldown = 50;
@@ -819,6 +839,13 @@ document.addEventListener("keyup", (e) => {
             break;
         case "p":
             pauseDebounce = false;
+            break;
+        case "r":  
+            let newSpot = findPointFromRay(player.position, mousePos, true);
+            if(newSpot != mousePos){
+                entities.push(new Marker(newSpot.X, newSpot.Y, "red"));
+                entities.push(new Marker(player.position.X, player.position.Y, "green"));
+            }
             break;
         default:
             break;
