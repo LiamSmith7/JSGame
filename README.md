@@ -7,4 +7,3 @@ TODO:
     
     - Raycast faster projectiles (using raycast to detect entities and raycast to find point) for more accurate simulation
 
-    

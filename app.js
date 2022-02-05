@@ -204,16 +204,15 @@ function findEntityFromRay(start, finish, faction){
         }
     });
 
-    // Nothing was hit, 
-    if(hitPoints.length == 0) {
-        return null, finish;
-    }
-
     // {Entity, Vector2}
     let closest = {Entity: null, HitPos: finish};
+    // Nothing was hit, 
+    if(hitPoints.length == 0) {
+        return closest;
+    }
+
     let closestMagnitude = rayVector.magnitude;
     hitPoints.forEach(element => {
-        //console.log(element);
         let checkingMagnitude = Vector2.subtract(start, element.HitPos).magnitude;
         if(checkingMagnitude < closestMagnitude){
             closestMagnitude = checkingMagnitude;
@@ -221,8 +220,15 @@ function findEntityFromRay(start, finish, faction){
         }
     });
 
-    //console.log(closest);
     return closest;
+}
+
+function recalculateMousePos(){
+    let middleOffset = Vector2.subtract(screenHalf, new Vector2(mouseScreenPos.X, mouseScreenPos.Y));
+    mouseWorldPos = Vector2.add(new Vector2(
+        (middleOffset.X / size), 
+        (middleOffset.Y / size)
+    ), player.position);
 }
 
 // ============================================================================================================================================= //
@@ -239,8 +245,11 @@ let lines = [];
 
 const HALFPI = Math.PI / 2;
 
+let screenHalf = new Vector2(100, 100);
 let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
-let mousePos = new Vector2(0, 0);
+let mouseScreenPos = new Vector2(0, 0);
+let mouseWorldPos = new Vector2(0, 0);
+
 let player = null;
 let firingProjectiles = false;
 let firingLasers = false;
@@ -249,8 +258,8 @@ function togglePause(){
     paused = !paused;
 }
 
-function round(num){
-    return (Math.round(num * 1000) / 1000) + 0.0;
+function round(num, to = 1000){
+    return (Math.round(num * to) / to);
 }
 
 // ============================================================================================================================================= //
@@ -357,6 +366,10 @@ function draw(){
     // Clear canvas
     canvas.clearRect(0, 0, game.width, game.height);
 
+    // The walls start anti-aliasing strangely (gaps in between individual wall blocks) without rounding.
+    let originX = Math.round(screenHalf.X - (player.position.X * size));
+    let originY = Math.round(screenHalf.Y - (player.position.Y * size));
+
     // World
     for(let x = 0; x < world.length; x++){
         if(world[x] != null){
@@ -364,7 +377,7 @@ function draw(){
                 if(world[x][y] == 1){
                     canvas = game.getContext("2d");
                     canvas.fillStyle = "#DDDDDD";
-                    canvas.fillRect(x * size, y * size, size, size);
+                    canvas.fillRect(originX + x * size, originY + y * size, size, size);
                 }
             }
         }
@@ -376,7 +389,7 @@ function draw(){
         let position = projectile.position;
         let hitbox = projectile.hitbox;
         let hitboxHalf = projectile.hitboxHalf;
-        canvas.translate(position.X * size, position.Y * size);
+        canvas.translate(originX + position.X * size, originY + position.Y * size);
         canvas.rotate(projectile.angle);
         canvas.fillStyle = projectile.colour;
         canvas.fillRect(-hitboxHalf.X * size , -hitboxHalf.Y * size, hitbox.X * size, hitbox.Y * size);
@@ -389,8 +402,8 @@ function draw(){
     for(const i in entities){
         let entity = entities[i];
 
-        let x = (entity.position.X - entity.hitboxHalf.X) * size;
-        let y = (entity.position.Y - entity.hitboxHalf.Y) * size;
+        let x = originX + (entity.position.X - entity.hitboxHalf.X) * size;
+        let y = originY + (entity.position.Y - entity.hitboxHalf.Y) * size;
         let xSize = entity.hitbox.X * size;
         let ySize = entity.hitbox.Y * size
 
@@ -413,7 +426,7 @@ function draw(){
             }
 
             // Turrets
-            canvas.translate(entity.position.X * size, entity.position.Y * size);
+            canvas.translate(originX + entity.position.X * size, originY + entity.position.Y * size);
             canvas.rotate(entity.angle);
             canvas.fillStyle = "#777777";
             if(entity instanceof ClusterEnemy){
@@ -433,8 +446,8 @@ function draw(){
         canvas.lineWidth = line.thickness;
         canvas.strokeStyle = line.colour;
         canvas.beginPath();
-        canvas.moveTo(line.pos1.X * size, line.pos1.Y * size);
-        canvas.lineTo(line.pos2.X * size, line.pos2.Y * size);
+        canvas.moveTo(originX + line.pos1.X * size, originY + line.pos1.Y * size);
+        canvas.lineTo(originX + line.pos2.X * size, originY + line.pos2.Y * size);
         canvas.stroke();
     });
 
@@ -717,17 +730,17 @@ class Player extends LivingEntity {
     }
     update(){
         this._momentum = new Vector2((movement[2] - movement[3]) / 5, (movement[1] - movement[0]) / 5);
-        this._angle = findAngle(this._position, mousePos);
+        this._angle = findAngle(this._position, mouseWorldPos);
         if(this._laserCooldown > 0) this._laserCooldown--;
         super.update();
 
         if(firingProjectiles && this._cooldown == 0){
             this._cooldown = 5;
-            projectiles.push(new Projectile(this._position, mousePos, "Hostile", 0.5));
+            projectiles.push(new Projectile(this._position, mouseWorldPos, "Hostile", 0.5));
         }
         if(firingLasers && this._laserCooldown == 0){
             this._laserCooldown = 50;
-            let rayVector = getRayDirection(player.position, mousePos).normalize().multiply(100);
+            let rayVector = getRayDirection(player.position, mouseWorldPos).normalize().multiply(100);
             let result = findBlockFromRay(player.position, rayVector);
             let closest = findEntityFromRay(player.position, result.HitPos, "Hostile");
             if(closest.Entity != null){
@@ -957,6 +970,9 @@ function iterate(item){
 function update(e){
     if (paused) return;
 
+    if(movement[0] != 0 || movement[1] != 0 || movement[2] != 0 || movement[3] != 0)
+        recalculateMousePos();
+
     // Going backwards through the list to allow removing from the list mid-loop
     for(let i = entities.length - 1; i >= 0; i--){
         if(iterate(entities[i]))
@@ -1040,7 +1056,8 @@ document.addEventListener("keyup", (e) => {
 });
 
 game.addEventListener("mousemove", e => {
-    mousePos = new Vector2(e.layerX / size, e.layerY / size);
+    mouseScreenPos = new Vector2(e.layerX, e.layerY);
+    recalculateMousePos();
 });
 
 game.addEventListener("mousedown", e => {
@@ -1051,16 +1068,19 @@ game.addEventListener("mouseup", e => {
     firingProjectiles = false;
 });
 
-window.onresize = () =>{
+function resizeWindow(){
     game.height = window.innerHeight;
     game.width = window.innerWidth;
-};
+    screenHalf = new Vector2(window.innerWidth / 2, window.innerHeight / 2);
+    console.log("Resized");
+}
+
+window.onresize = resizeWindow;
 
 // ============================================================================================================================================= //
 //   RUNNING
 // ============================================================================================================================================= //
-game.height = window.innerHeight;
-game.width = window.innerWidth;
 
+resizeWindow();
 start();
 draw();
