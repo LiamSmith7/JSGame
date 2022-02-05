@@ -1,7 +1,6 @@
 // ============================================================================================================================================= //
-//   2D MATHS
+//   Vectors and Raycasting
 // ============================================================================================================================================= //
-
 class Vector2{
     constructor(X, Y){
         this._x = X;
@@ -30,6 +29,13 @@ class Vector2{
             this._x /= this._magnitude;
             this._y /= this._magnitude;
         }
+        this._magnitude = Vector2.calculateMagnitude(this);
+        return this;
+    }
+    multiply(number){
+        this._x *= number;
+        this._y *= number;
+        this._magnitude = Vector2.calculateMagnitude(this);
         return this;
     }
     static normalize(vector2){ // Use if you don't want to normalize the parameter (returns normalized copy of vector)
@@ -64,11 +70,8 @@ function findUnitVectorFromAngle(angle){
     return new Vector2(-Math.sin(angle - HALFPI), Math.cos(angle - HALFPI));
 }
 
-function findPointFromRay(start, finish, test = false){
-    let rayVector = Vector2.subtract(start, finish);
-
-    if(test) lines.push({x1: start.X, x2: start.X + rayVector.X, y1: start.Y, y2: start.Y + rayVector.Y});
-    /*
+function findBlockFromRay(start, rayVector){
+/*
     Divide both X and Y by X and Y
     {50, 25}
     yRatio = 25 / 50 = 0.5
@@ -96,19 +99,23 @@ function findPointFromRay(start, finish, test = false){
     let xDif = (xDirection == 1 ? 0 : 1) - (start.X - Math.floor(start.X));
     let yDif = (yDirection == 1 ? 0 : 1) - (start.Y - Math.floor(start.Y));
 
-    let closestX = finish;
-    let closestY = finish;
+    // {Coordinates, HitPos}
+    let finish = Vector2.add(start, rayVector);
+    let closestX = {Coordinates: null, HitPos: finish};
+    let closestY = {Coordinates: null, HitPos: finish};
 
     // Since it checks from the start point, any further results after the first don't matter.
     for(let x = xDirection + xDif; Math.abs(x) <= Math.abs(rayVector.X); x += xDirection){
         let xOffset = start.X + x;
         let yOffset = start.Y + (yRatio * x);
-        if(read(Math.floor(xOffset), Math.floor(yOffset))){    
-            closestX = new Vector2(xOffset, yOffset);
+        let readX = Math.floor(xOffset);
+        let readY = Math.floor(yOffset);
+        if(read(readX, readY)){    
+            closestX = {Coordinates: new Vector2(readX, readY), HitPos: new Vector2(xOffset, yOffset)};
             break;
         }
-        else if(read(Math.floor(xOffset) - 1, Math.floor(yOffset))){
-            closestX = new Vector2(xOffset, yOffset);
+        else if(read(readX - 1, readY)){
+            closestX = {Coordinates: new Vector2(readX - 1, readY), HitPos: new Vector2(xOffset, yOffset)};
             break;
         }
     }
@@ -116,22 +123,106 @@ function findPointFromRay(start, finish, test = false){
     for(let y = yDirection + yDif; Math.abs(y) <= Math.abs(rayVector.Y); y += yDirection){
         let xOffset = start.X + (xRatio * y);
         let yOffset = start.Y + y;
-        if(read(Math.floor(xOffset), Math.floor(yOffset))){
-            closestY = new Vector2(xOffset, yOffset);
+        let readX = Math.floor(xOffset);
+        let readY = Math.floor(yOffset);
+        if(read(readX, readY)){
+            closestY = {Coordinates: new Vector2(readX, readY), HitPos: new Vector2(xOffset, yOffset)};
             break;
         }
-        else if(read(Math.floor(xOffset), Math.floor(yOffset) - 1)){
-            closestY = new Vector2(xOffset, yOffset);
+        else if(read(readX, readY - 1)){
+            closestY = {Coordinates: new Vector2(readX, readY - 1), HitPos: new Vector2(xOffset, yOffset)};
             break;
         }
     }
 
     // Checks the magnitude of the two found points and returns the one closest to the start
-    if(Vector2.subtract(closestX, start).magnitude < Vector2.subtract(closestY, start).magnitude)
+    if(Vector2.subtract(closestX.HitPos, start).magnitude < Vector2.subtract(closestY.HitPos, start).magnitude)
         return closestX;
     else
         return closestY;
+}
 
+/**
+ * Returns an Object containing the Block coordinates and the exact hit position.
+ * If the Block coordinates are null, no block was found.
+ *
+ * @param {Vector2} start The origin of the raycast
+ * @param {Vector2} finish The raycast's end point
+ * @returns (Coordinates, HitPos) - Coordinates = World coordinates, HitPos = Exact location
+ */
+function findBlockBetween(start, finish){
+    return findBlockFromRay(start, Vector2.subtract(start, finish));
+}
+
+/**
+ * Returns a Vector2 representing a ray between the start and finish positions.
+ *
+ * @param {Vector2} start The origin of the ray
+ * @param {Vector2} finish Where the way should end
+ * @returns {Vector2} Ray's direction
+ */
+function getRayDirection(start, finish){
+    return Vector2.subtract(start, finish)
+}
+
+function findEntityFromRay(start, finish, faction){
+    let rayVector = Vector2.subtract(start, finish);
+    let yRatio = rayVector.Y / rayVector.X;
+    let hitPoints = [];
+
+    entities.forEach(entity => {
+        if(find == null || entity.faction == faction){
+            let topLeft = Vector2.subtract(entity.hitboxHalf, entity.position);
+            let bottomRight = Vector2.add(entity.position, entity.hitboxHalf);
+            // Check Top and Bottom bounds
+            // y = mx + c
+            // y - c = mx
+            // (y - c) / m = x
+            // fX = sX + ((fY - sY) / yRatio)
+            let coordinate = start.X + ((topLeft.Y - start.Y) / yRatio);
+            if(coordinate >= topLeft.X && coordinate <= bottomRight.X){
+                hitPoints.push({Entity: entity, HitPos: new Vector2(coordinate, topLeft.Y)});
+            }
+            coordinate = start.X + ((bottomRight.Y - start.Y) / yRatio);
+            if(coordinate >= topLeft.X && coordinate <= bottomRight.X){
+                hitPoints.push({Entity: entity, HitPos: new Vector2(coordinate, bottomRight.Y)});
+            }
+
+            // Check Left and Right bounds
+            // fX = sX + ((fY - sY) / yRatio)
+            // fX - sX = (fY - sY) / yRatio
+            // (fX - sX) * yRatio = fY - sY
+            // fY = sY + ((fx - sX) * yRatio)
+            coordinate = start.Y + ((topLeft.X - start.X) * yRatio);
+            if(coordinate >= topLeft.Y && coordinate <= bottomRight.Y){
+                hitPoints.push({Entity: entity, HitPos: new Vector2(topLeft.X, coordinate)});
+            }
+            coordinate = start.Y + ((bottomRight.X - start.X) * yRatio);
+            if(coordinate >= topLeft.Y && coordinate <= bottomRight.Y){
+                hitPoints.push({Entity: entity, HitPos: new Vector2(bottomRight.X, coordinate)});
+            }
+        }
+    });
+
+    // Nothing was hit, 
+    if(hitPoints.length == 0) {
+        return null, finish;
+    }
+
+    // {Entity, Vector2}
+    let closest = {Entity: null, HitPos: finish};
+    let closestMagnitude = rayVector.magnitude;
+    hitPoints.forEach(element => {
+        //console.log(element);
+        let checkingMagnitude = Vector2.subtract(start, element.HitPos).magnitude;
+        if(checkingMagnitude < closestMagnitude){
+            closestMagnitude = checkingMagnitude;
+            closest = element;
+        }
+    });
+
+    //console.log(closest);
+    return closest;
 }
 
 // ============================================================================================================================================= //
@@ -147,12 +238,12 @@ let projectiles = [];
 let lines = [];
 
 const HALFPI = Math.PI / 2;
-const TAU = Math.PI * 2;
 
 let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
 let mousePos = new Vector2(0, 0);
 let player = null;
-let firing = false;
+let firingProjectiles = false;
+let firingLasers = false;
 
 function togglePause(){
     paused = !paused;
@@ -302,81 +393,128 @@ function draw(){
         let y = (entity.position.Y - entity.hitboxHalf.Y) * size;
         let xSize = entity.hitbox.X * size;
         let ySize = entity.hitbox.Y * size
-        // Body
 
+        // Body
         canvas.fillStyle = entity.colour;
         canvas.fillRect(x, y, xSize, ySize);
 
-        if(entity instanceof Marker) continue;
+        if(entity instanceof LivingEntity){
+            // Healthbar
+            if(entity._showHealthbar){
+                let healthbarOffset = y - 10
+                let healthPercentage = (1 / entity.maxHealth) * entity.health
+                canvas.fillStyle = "#000000";
+                canvas.fillRect(x - 1, healthbarOffset - 1, xSize + 2, HEALTHBAR_HEIGHT + 2);
 
-        // Healthbar
-        if(entity._showHealthbar){
-            let healthbarOffset = y - 10
-            let healthPercentage = (1 / entity.maxHealth) * entity.health
-            canvas.fillStyle = "#000000";
-            canvas.fillRect(x - 1, healthbarOffset - 1, xSize + 2, HEALTHBAR_HEIGHT + 2);
+                canvas.fillStyle = "#FF0000";
+                canvas.fillRect(x, healthbarOffset, xSize, HEALTHBAR_HEIGHT);
+                canvas.fillStyle = "#00FF00";
+                canvas.fillRect(x, healthbarOffset, xSize * healthPercentage, HEALTHBAR_HEIGHT);
+            }
 
-            canvas.fillStyle = "#FF0000";
-            canvas.fillRect(x, healthbarOffset, xSize, HEALTHBAR_HEIGHT);
-            canvas.fillStyle = "#00FF00";
-            canvas.fillRect(x, healthbarOffset, xSize * healthPercentage, HEALTHBAR_HEIGHT);
+            // Turrets
+            canvas.translate(entity.position.X * size, entity.position.Y * size);
+            canvas.rotate(entity.angle);
+            canvas.fillStyle = "#777777";
+            if(entity instanceof ClusterEnemy){
+                canvas.fillRect(-0.1 * size, -0.25 * size, 1 * size, 0.5 * size );
+            }
+            else{
+                canvas.fillRect(-0.1 * size, -0.1 * size, 1 * size, 0.2 * size );
+            }
         }
-
-        // Turrets
-        canvas.translate(entity.position.X * size, entity.position.Y * size);
-        canvas.rotate(entity.angle);
-        canvas.fillStyle = "#777777";
-        if(entity instanceof ClusterEnemy){
-            canvas.fillRect(-0.1 * size, -0.25 * size, 1 * size, 0.5 * size );
-        }
-        else{
-            canvas.fillRect(-0.1 * size, -0.1 * size, 1 * size, 0.2 * size );
-        }
-
         // Reset ctx
         canvas.setTransform(1, 0, 0, 1, 0, 0);
     }
-
-    canvas.strokeStyle = "yellow";
-    canvas.lineWidth = 1;
+    
     // Lines {x1: 0, x2: 0, y1: 0, y2: 0}
-    for(const i in lines){
-        let line = lines[i];
+
+    lines.forEach(line => {
+        canvas.lineWidth = line.thickness;
+        canvas.strokeStyle = line.colour;
         canvas.beginPath();
-        canvas.moveTo(line.x1 * size, line.y1 * size);
-        canvas.lineTo(line.x2 * size, line.y2 * size);
+        canvas.moveTo(line.pos1.X * size, line.pos1.Y * size);
+        canvas.lineTo(line.pos2.X * size, line.pos2.Y * size);
         canvas.stroke();
-    }
+    });
 
     // Instructions
     canvas.font = "20px Arial";
     canvas.fillStyle = "#FFFFFF";
     canvas.fillText("Movement - WASD", 10, 20); 
-    canvas.fillText("Fire - Left Click", 10, 40); 
-    canvas.fillText("Reset - Space", 10, 60); 
+    canvas.fillText("Fire projectile - Left Click", 10, 40); 
+    canvas.fillText("Fire laser - R", 10, 60); 
     canvas.fillText("Pause - P", 10, 80); 
+    canvas.fillText("Reset - Space", 10, 100); 
 }
 
 // ============================================================================================================================================= //
-//   ENTITIES
+//   Lines / Lasers
+// ============================================================================================================================================= //
+
+class Line{
+    constructor(pos1, pos2){
+        this._pos1 = pos1;
+        this._pos2 = pos2;
+        this._width = 2;
+        this._colour = "yellow";
+        this._lifeTime = 25;
+        this._removed = false;
+    }
+    get pos1(){
+        return this._pos1;
+    }
+    get pos2(){
+        return this._pos2;
+    }
+    get colour(){
+        return this._colour;
+    }
+    get thickness(){
+        return this._width;
+    }
+    get lifeTime(){
+        return this._lifeTime;
+    }
+    get removed(){
+        return this._removed;
+    }
+    update(){
+        this._lifeTime--;
+        if(this._lifeTime <= 0)
+            this._removed = true;
+    }
+}
+
+class Laser extends Line {
+    constructor(pos1, pos2){
+        super(pos1, pos2);
+        this._width = 4;
+        this._lifeTime = 20;
+        this._colour = "rgba(255, 255, 0, 1)";
+        this._opacity = 1;
+    }
+    update(){
+        this._opacity -= 0.05;
+        this._colour = "rgba(255, 255, 0, " + this._opacity + ")";
+        this._width -= 0.2;
+        super.update();
+    }
+}
+
+// ============================================================================================================================================= //
+//   Entities
 // ============================================================================================================================================= //
 
 class Entity {
     constructor(posX, posY){
-        this.setHitbox(0.75, 0.75);
+        this.setHitbox(0.1, 0.1);
         this._momentum = new Vector2(0.0, 0.0);
         this._position = new Vector2(posX, posY);
-        this._angle = 0;
-        this.setHealth(0);
+        this._angle = 0;      
         this._removed = false;
-        this._colour = "rgba(255, 255, 255, "; // the rest of the rgba string is provided in the get method
-        this._cooldown = 0; // Used for character firing reloading or projectile timeout
-        this._isHit = 0;
-        this._showHealthbar = 0;
-    }
-    setHealth(hp){
-        this._health = hp;
-        this._maxHealth = hp;
+        this._colour = "rgba(255, 255, 255, 1)";
+        this._cooldown = 0; // Used for character firing reloading or projectile timeout      
     }
     update(){
         // The update method returns a value based off of what was hit and from what direction.
@@ -386,16 +524,12 @@ class Entity {
         // If false, hit the left or right of the wall.
 
         // Projectile's update methods can return the entity the projectile hit as well as null/true/false.
-
         if(this._removed) return;
         if(this._cooldown > 0) this._cooldown--;
-        if(this._isHit > 0) this._isHit--;
-        if(this._showHealthbar > 0) this._showHealthbar--;
 
         // Position + Momentum * lastUpdate.Milliseconds;
         // Update entity position
         let newPosition = Vector2.add(this._position, this._momentum);
-
         let oldEntityHitboxTopLeftCorner = new Vector2(this._position.X - this._hitboxHalf.X, this._position.Y - this._hitboxHalf.Y);
         let newEntityHitboxTopLeftCorner = new Vector2(newPosition.X - this._hitboxHalf.X, newPosition.Y - this._hitboxHalf.Y);
         
@@ -506,9 +640,6 @@ class Entity {
     get position(){
         return this._position;
     }
-    get healthbar(){
-        return this._showHealthbar > 0;
-    }
     get hitboxHalf(){
         return this._hitboxHalf;
     }
@@ -519,19 +650,14 @@ class Entity {
         return this._angle;
     }
     get colour(){ // Adds the opacity to the rgba colour string depending on if the entity is being hit.
-        return this._colour + (this._isHit > 0 ? "0.5)" : "1)");
+        return this._colour;
     }
     get removed(){
         return this._removed;
     }
-    get health(){
-        return this._health;
-    }
-    get maxHealth(){
-        return this._maxHealth;
-    }
 }
 
+// Basic marker for testing purposes
 class Marker extends Entity{
     constructor(posX, posY, colour = "blue"){
         super(posX, posY);
@@ -541,46 +667,101 @@ class Marker extends Entity{
     update(){
         // Do nothing
     }
+}
+
+// Entity has HP, healthbars, and factions.
+class LivingEntity extends Entity {
+    constructor(posX, posY){
+        super(posX, posY);
+        this.setHealth(0);
+        this._isHit = 0;
+        this._showHealthbar = 0;
+        this._faction = null;
+    }
+    update(){
+        if(this._isHit > 0) this._isHit--;
+        if(this._showHealthbar > 0) this._showHealthbar--;
+        super.update();
+    }
+    setHealth(hp){
+        this._health = hp;
+        this._maxHealth = hp;
+    }
+    get health(){
+        return this._health;
+    }
+    get maxHealth(){
+        return this._maxHealth;
+    }
+    get healthbar(){
+        return this._showHealthbar > 0;
+    }
     get colour(){
-        return this._colour;
+        return this._isHit > 0 ? "rgba(200, 200, 200, 0.1)" : this._colour;
+    }
+    get faction(){
+        return this._faction;
     }
 }
 
-class Player extends Entity {
+// The character the user controls
+class Player extends LivingEntity {
     constructor(posX, posY){
         super(posX, posY);
+        this.setHitbox(0.75, 0.75);
         this._momentum = new Vector2(0, 0);
         this.setHealth(10);
-        this._colour = "rgba(0, 200, 0, ";
+        this._colour = "rgba(0, 200, 0, 1)";
+        this._laserCooldown = 0;
+        this._faction = "Friendly"
     }
     update(){
         this._momentum = new Vector2((movement[2] - movement[3]) / 5, (movement[1] - movement[0]) / 5);
         this._angle = findAngle(this._position, mousePos);
-
+        if(this._laserCooldown > 0) this._laserCooldown--;
         super.update();
 
-        if(firing && this._cooldown == 0){
+        if(firingProjectiles && this._cooldown == 0){
             this._cooldown = 5;
-            projectiles.push(new Projectile(this, mousePos));
+            projectiles.push(new Projectile(this._position, mousePos, "Hostile", 0.5));
+        }
+        if(firingLasers && this._laserCooldown == 0){
+            this._laserCooldown = 50;
+            let rayVector = getRayDirection(player.position, mousePos).normalize().multiply(100);
+            let result = findBlockFromRay(player.position, rayVector);
+            let closest = findEntityFromRay(player.position, result.HitPos, "Hostile");
+            if(closest.Entity != null){
+                lines.push(new Laser(player.position, closest.HitPos));
+                closest.Entity.damage(3);
+            }
+            else{
+                lines.push(new Laser(player.position, result.HitPos));
+            }
         }
     }
 }
 
-class Enemy extends Entity {
+class Enemy extends LivingEntity {
     constructor(posX, posY){
         super(posX, posY);
         this.setHealth(5);
-        this._colour = "rgba(255, 0, 0, ";
+        this.setHitbox(0.75, 0.75);
+        this._colour = "rgba(255, 0, 0, 1)";
         this._cooldown = 50;
+        this._faction = "Hostile";
     }
     changeAngle(){
         this._angle = findAngle(this._position, player.position);
     }
+    canSeePlayer(){
+        // findBlockFromRay returns the block the ray hits, if it hits nothing it means it has a direct line of sight to the player
+        return findBlockBetween(this._position, player.position).Coordinates == null;
+    }
     update(){
         this.changeAngle();
-        if(findPointFromRay(this._position, player.position) == player.position){
+        if(this.canSeePlayer()){
             if(this._cooldown <= 0){
-                projectiles.push(new Projectile(this, player.position));
+                projectiles.push(new Projectile(this._position, player.position, "Friendly"));
                 this._cooldown = 25;
             }
         }
@@ -595,15 +776,15 @@ class LargeEnemy extends Enemy{
     constructor(posX, posY){
         super(posX, posY);
         this.setHealth(10);
-        this._colour = "rgba(150, 0, 0, ";
+        this._colour = "rgba(150, 0, 0, 1)";
         this._cooldown = 50;
         this.setHitbox(1, 1);
     }
     update(){
         this.changeAngle();
-        if(findPointFromRay(this._position, player.position) == player.position){
+        if(this.canSeePlayer()){
             if(this._cooldown <= 0){
-                projectiles.push(new BouncingProjectile(this, player.position));
+                projectiles.push(new BouncingProjectile(this._position, player.position, "Friendly"));
                 this._cooldown = 50;
             }
         }
@@ -618,14 +799,14 @@ class ClusterEnemy extends Enemy{
     constructor(posX, posY){
         super(posX, posY);
         this.setHealth(5);
-        this._colour = "rgba(200, 100, 0, ";
+        this._colour = "rgba(200, 100, 0, 1)";
         this._cooldown = 30;
     }
     update(){
         this.changeAngle();
-        if(findPointFromRay(this._position, player.position) == player.position){
+        if(this.canSeePlayer()){
             if(this._cooldown <= 0){
-                projectiles.push(new ClusterProjectile(this, player.position));
+                projectiles.push(new ClusterProjectile(this._position, player.position, "Friendly"));
                 this._cooldown = 50;
             }
         }
@@ -640,18 +821,18 @@ class ClusterEnemy extends Enemy{
 //   PROJECTILES
 // ============================================================================================================================================= //
 class Projectile extends Entity {
-    constructor(shotBy, shotTo, speed = 0.5){
-        super(shotBy.position.X, shotBy.position.Y);
-        this._originEntity = shotBy;
-        this._cooldown = 125;
-        this._colour = "rgba(255, 255, 0, ";
-        this.setHitbox(0.2, 0.2);
-        this._damage = 1;
-        
-        //let unitVector = normalizeVector(getVector(shotBy.position, shotTo))
-        let unitVector = Vector2.subtract(shotBy.position, shotTo).normalize();
+    constructor(shotFrom, shotTo, desiredTarget, speed = 0.5){
+        super(shotFrom.X, shotFrom.Y);
+        this._desiredTarget = desiredTarget;
+
+        let unitVector = Vector2.subtract(shotFrom, shotTo).normalize();
         this._momentum = new Vector2(unitVector.X * speed, unitVector.Y * speed);
         this._angle = findAngleFromUnitVector(unitVector);
+
+        this._cooldown = 125;
+        this._colour = "yellow";
+        this.setHitbox(0.2, 0.2);
+        this._damage = 1;
     }
     getAngleFromMomentum(){
         this._angle = findAngleFromUnitVector(Vector2.normalize(this._momentum));
@@ -665,7 +846,7 @@ class Projectile extends Entity {
         // Check entity collisions first
         let collided = null;
         for(const entity of entities){
-            if(entity != this._originEntity){
+            if(entity.faction == this._desiredTarget){
                 let left = entity.position.X - entity.hitboxHalf.X;
                 let right = entity.position.X + entity.hitboxHalf.X;
 
@@ -695,8 +876,8 @@ class Projectile extends Entity {
 }
 
 class BouncingProjectile extends Projectile {
-    constructor(shotBy, shotTo, speed = 0.5){
-        super(shotBy, shotTo, speed);
+    constructor(shotFrom, shotTo, desiredTarget){
+        super(shotFrom, shotTo, desiredTarget, 0.5);
         this.setHitbox(0.4, 0.4);
         this._bounceTimes = 4;
         this._damage = 2;
@@ -721,9 +902,8 @@ class BouncingProjectile extends Projectile {
 }
 
 class MiniBouncingProjectile extends BouncingProjectile {
-    constructor(shotBy, shotTo, shotFrom){
-        super(shotBy, shotTo, 0.4);
-        this._originEntity = shotFrom;
+    constructor(shotFrom, shotTo, desiredTarget){
+        super(shotFrom, shotTo, desiredTarget, 0.4);
         this.setHitbox(0.2, 0.2);
         this._bounceTimes = 2;
         this._damage = 1;
@@ -734,18 +914,18 @@ class MiniBouncingProjectile extends BouncingProjectile {
 const CLUSTER_VARIATION = 0.2;
 const CLUSTER_VARIATION_2 = CLUSTER_VARIATION * 2;
 class ClusterProjectile extends BouncingProjectile {
-    constructor(shotBy, shotTo){
-        super(shotBy, shotTo, 0.4);
+    constructor(shotFrom, shotTo, desiredTarget){
+        super(shotFrom, shotTo, desiredTarget, 0.4);
         this.setHitbox(0.3, 0.3);
         this._cooldown = 25;
         this._damage = 2;
         this._bounceTimes = 10;
     }
     createNewCluster(m){
-        projectiles.push(new MiniBouncingProjectile(this, new Vector2(
+        projectiles.push(new MiniBouncingProjectile(this._position, new Vector2(
             this._position.X + m.X,
             this._position.Y + m.Y,
-        ), this._originEntity)); 
+        ), this._desiredTarget)); 
     }
     update(){
         let hit = super.update();
@@ -786,6 +966,10 @@ function update(e){
         if(iterate(projectiles[i]))
             projectiles.splice(i, 1);
     }
+    for(let i = lines.length - 1; i >= 0; i--){
+        if(iterate(lines[i]))
+            lines.splice(i, 1);
+    }
 
     draw();
 }
@@ -814,6 +998,13 @@ document.addEventListener("keydown", (e) => {
                 pauseDebounce = true;
                 paused = !paused;
             }
+            if(paused){
+                canvas.fillStyle = "rgba(0, 0, 0, 0.7)"
+                canvas.fillRect(0, 0, game.width, game.height);
+            }
+            break;
+        case "r":
+            firingLasers = true;
             break;
         default:
             break;
@@ -840,12 +1031,8 @@ document.addEventListener("keyup", (e) => {
         case "p":
             pauseDebounce = false;
             break;
-        case "r":  
-            let newSpot = findPointFromRay(player.position, mousePos, true);
-            if(newSpot != mousePos){
-                entities.push(new Marker(newSpot.X, newSpot.Y, "red"));
-                entities.push(new Marker(player.position.X, player.position.Y, "green"));
-            }
+        case "r":
+            firingLasers = false;
             break;
         default:
             break;
@@ -857,11 +1044,11 @@ game.addEventListener("mousemove", e => {
 });
 
 game.addEventListener("mousedown", e => {
-    firing = true;
+    firingProjectiles = true;
 });
 
 game.addEventListener("mouseup", e => {
-    firing = false;
+    firingProjectiles = false;
 });
 
 window.onresize = () =>{
