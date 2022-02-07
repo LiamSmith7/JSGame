@@ -33,12 +33,6 @@ class Vector2{
     multiply(number){ // Returns a multiplied copy of the current vector
         return new Vector2(this._x * number, this._y * number);
     }
-    static normalize(vector2){  // Normalize the provided vector
-        if(vector2._magnitude != 0){
-            vector2.X /= vector2.magnitude;
-            vector2.Y /= vector2.magnitude;
-        }
-    }
     static calculateMagnitude(vector2){
         return Math.sqrt((vector2.X * vector2.X) + (vector2.Y * vector2.Y));
     }
@@ -72,13 +66,13 @@ function findUnitVectorFromAngle(angle){
  *
  * @param {Vector2} start The origin of the raycast
  * @param {Vector2} rayVector The ray's direction
- * @returns (Coordinates, HitPos, Side) - Coordinates = World coordinates (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
+ * @returns {{ Coordinates: Vector2; HitPos: Vector2; Side: boolean}} Coordinates = World coordinates (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
  */
 function findBlockFromRay(start, rayVector, test = false){
 /*
     Divide both X and Y by X and Y
     {50, 25}
-    yRatio = 25 / 50 = 0.5
+    yRatio = 25 / 50 = 0.5s
     xRatio = 50 / 25 = 2
 
     Iterate through X:
@@ -161,7 +155,7 @@ function findBlockFromRay(start, rayVector, test = false){
  *
  * @param {Vector2} start The origin of the raycast
  * @param {Vector2} finish The raycast's end point
- * @returns (Coordinates, HitPos, Side) - Coordinates = World coordinates (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
+ * @returns {{ Coordinates: Vector2; HitPos: Vector2; Side: boolean}} Coordinates = World coordinates (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
  */
 function findBlockBetween(start, finish){
     return findBlockFromRay(start, Vector2.subtract(start, finish));
@@ -184,8 +178,8 @@ function getRayDirection(start, finish){
  *
  * @param {Vector2} start The origin of the raycast
  * @param {Vector2} finish The raycast's end point
- * @param {String} faction What kind of entity the raycast should attempt to find (E.g. "Hostile" or "Friendly")
- * @returns (Entity, HitPos, Side) - Entity = Hit entity (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
+ * @param {String} faction What kind of entity the raycast should attempt to find (E.g. "Hostile" or "Friendly") 
+ * @returns {{ Entity: Entity; HitPos: Vector2; Side: boolean}} Entity = Hit entity (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
  */
 function findEntityFromRay(start, finish, faction){
     let rayVector = Vector2.subtract(start, finish);
