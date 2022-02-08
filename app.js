@@ -1,5 +1,5 @@
 // ============================================================================================================================================= //
-//   Vectors and Raycasting
+//   Vectors
 // ============================================================================================================================================= //
 class Vector2{
     constructor(X, Y){
@@ -60,6 +60,124 @@ function findUnitVectorFromAngle(angle){
     return new Vector2(-Math.sin(angle - HALFPI), Math.cos(angle - HALFPI));
 }
 
+// ============================================================================================================================================= //
+//   Pathfinding
+// ============================================================================================================================================= //
+
+const pX = new Vector2(1, 0);
+const nX = new Vector2(-1, 0);
+const pY = new Vector2(0, 1);
+const nY = new Vector2(0, -1);
+
+class Pathfind {
+    constructor(startPos, finishPos){
+        
+        startPos = new Vector2(Math.floor(startPos.X), Math.floor(startPos.Y));
+        finishPos = new Vector2(Math.floor(finishPos.X), Math.floor(finishPos.Y));
+        console.log(startPos);
+        console.log(finishPos);
+        // Keeps track of what paths are going where
+        this._pathMap = [];
+        this._path = [];
+        this.record(startPos, startPos)
+
+        let searchingPositions = [startPos];
+        let newSearchingPositions = [];
+
+        let found = null; // What position has reached the finish point
+        let running = true; // Remains true if there are spaces to search
+        let searching = null; // Temporary variable to search/record paths
+        let timeout = 100;
+
+        const search = (searching, origin) => {
+            if(this.record(searching, origin)) newSearchingPositions.push(searching);
+        }
+
+        while(running){
+            timeout--;
+            searchingPositions.forEach(origin => {
+                // Look +X
+                search(Vector2.add(origin, pX), origin);
+                // Look -X
+                search(Vector2.add(origin, nX), origin);
+                // Look +Y
+                search(Vector2.add(origin, pY), origin);
+                // Look -Y
+                search(Vector2.add(origin, nY), origin);
+                
+                // Look +X +Y
+                search(Vector2.add(Vector2.add(origin, pX), pY), origin);
+                // Look +X -Y
+                search(Vector2.add(Vector2.add(origin, pX), nY), origin);
+                // Look -X +Y
+                search(Vector2.add(Vector2.add(origin, nX), pY), origin);
+                // Look -X -Y
+                search(Vector2.add(Vector2.add(origin, nX), nY), origin);
+            });
+            //console.log(newSearchingPositions.length);
+            if(newSearchingPositions.length == 0 || timeout == 0){
+                running = false;
+            }
+            else{
+                newSearchingPositions.forEach(newPosition => {
+                    if(newPosition.X == finishPos.X && newPosition.Y == finishPos.Y){
+                        found = newPosition;
+                        running = false;
+                    }
+                });
+                if(!found){
+                    searchingPositions.length = 0;
+                    newSearchingPositions.map(value => {
+                        searchingPositions.push(value);
+                    });
+                    newSearchingPositions.length = 0;
+                }
+            }
+        }
+        if(found != null){
+            console.log("Found");
+            this._found = true;
+            
+            let track = finishPos;
+            searching = finishPos;
+
+            do{
+                searching = track;
+                track = this.read(searching);
+                this._path.push(searching);
+            } while (!(track.X == searching.X && track.Y == searching.Y))
+            
+        }
+        else{
+            console.log("Not found");
+            
+            this._found = false;
+        }
+    }
+    record(position, origin){
+        if(this._pathMap[position.X] == null) this._pathMap[position.X] = []; // If no Y array exists at column X, add it
+        // The final 2 readWorld function calls only make a difference if a diagonal movement is being recorded.
+        if(this._pathMap[position.X][position.Y] == null && !readWorld(position.X, position.Y) && !readWorld(position.X, origin.Y) && !readWorld(origin.X, position.Y)){
+            this._pathMap[position.X][position.Y] = origin;
+            return true;
+        }
+        return false;     
+    }
+    read(position){
+        return this._pathMap[position.X][position.Y];
+    }
+    get found(){
+        return this._found;
+    }
+    get path(){
+        return this._path;
+    }
+}
+
+// ============================================================================================================================================= //
+//   Raycasting
+// ============================================================================================================================================= //
+
 /**
  * Returns an Object containing the Block coordinates and the exact hit position.
  * If the Block coordinates are null, no block was found.
@@ -113,27 +231,26 @@ function findBlockFromRay(start, rayVector, test = false){
         let yOffset = start.Y + (yRatio * x);
         let readX = Math.floor(xOffset);
         let readY = Math.floor(yOffset);
-        if(read(readX, readY)){    
+        if(readWorld(readX, readY)){    
             closestX = {Coordinates: new Vector2(readX, readY), HitPos: new Vector2(xOffset, yOffset), Side: false};
             break;
         }
-        else if(read(readX - 1, readY)){
+        else if(readWorld(readX - 1, readY)){
             closestX = {Coordinates: new Vector2(readX - 1, readY), HitPos: new Vector2(xOffset, yOffset), Side: false};
             break;
         }
     }
 
     for(let y = startY; Math.abs(y) <= Math.abs(rayVector.Y); y += yDirection){
-
         let xOffset = start.X + (xRatio * y);
         let yOffset = start.Y + y;
         let readX = Math.floor(xOffset);
         let readY = Math.floor(yOffset);
-        if(read(readX, readY)){
+        if(readWorld(readX, readY)){
             closestY = {Coordinates: new Vector2(readX, readY), HitPos: new Vector2(xOffset, yOffset), Side: true};
             break;
         }
-        else if(read(readX, readY - 1)){
+        else if(readWorld(readX, readY - 1)){
             closestY = {Coordinates: new Vector2(readX, readY - 1), HitPos: new Vector2(xOffset, yOffset), Side: true};
             break;
         }
@@ -191,7 +308,7 @@ function findEntityFromRay(start, finish, faction){
     let lowerBound = new Vector2(Math.min(start.X, finish.X), Math.min(start.Y, finish.Y));
 
     entities.forEach(entity => {
-        if(find == null || entity.faction == faction){
+        if((find == null || entity.faction == faction) && !entity.immune){
             let topLeft = Vector2.subtract(entity.hitboxHalf, entity.position);
             let bottomRight = Vector2.add(entity.position, entity.hitboxHalf);
             let coordinate = 0;
@@ -299,7 +416,7 @@ function round(num, to = 1000){
 //   WORLD
 // ============================================================================================================================================= //
 
-function place(x, y, id){
+function placeWorld(x, y, id){
     if(world[x] == null)
         world[x] = [];
     world[x][y] = id;
@@ -307,25 +424,25 @@ function place(x, y, id){
 
 function placeHorizontal(y, x1, x2, id){
     for(let i = Math.min(x1, x2); i <= Math.max(x1, x2); i++){
-        place(i, y, id);
+        placeWorld(i, y, id);
     }  
 }
 
 function placeVertical(x, y1, y2, id){
     for(let i = Math.min(y1, y2); i <= Math.max(y1, y2); i++){
-        place(x, i, id);
+        placeWorld(x, i, id);
     }
 }
 
 function placeBox(x1, y1, x2, y2, id){
     for(let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++){
         for(let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++){
-            place(x, y, id);
+            placeWorld(x, y, id);
         }
     }
 }
 
-function read(x, y){
+function readWorld(x, y){
     if(world[x] == null)
         world[x] = [];
     return world[x][y];
@@ -353,13 +470,13 @@ function start(){
     placeVertical(12, 12, 18, 1);
     placeVertical(22, 12, 18, 1);
 
-    place(17, 18, null);
-    place(14, 14, 1);
+    placeWorld(17, 18, null);
+    placeWorld(14, 14, 1);
 
     // Building 2
     placeBox(15, 23, 28, 28, 1);
     placeBox(16, 24, 27, 27, null);
-    place(21, 23, null);
+    placeWorld(21, 23, null);
 
     // Building 3
     placeBox(24, 13, 28, 20, 1);
@@ -368,7 +485,7 @@ function start(){
     // Area2
     placeBox(30, 10, 50, 30, 1);
     placeBox(31, 11, 49, 29, null);
-    place(30, 20, null);
+    placeWorld(30, 20, null);
 
     placeHorizontal(22, 37, 47, 1);
 
@@ -381,7 +498,7 @@ function start(){
     player = new Player(20.2, 21.99);
     entities.push(player);
 
-    place(10, 10, 1);
+    placeWorld(10, 10, 1);
 
     game.interval = setInterval(update, 20);
 }
@@ -415,6 +532,17 @@ function draw(){
             }
         }
     }
+
+    // Lines {x1: 0, x2: 0, y1: 0, y2: 0}
+
+    lines.forEach(line => {
+        canvas.lineWidth = line.thickness;
+        canvas.strokeStyle = line.colour;
+        canvas.beginPath();
+        canvas.moveTo(originX + line.pos1.X * size, originY + line.pos1.Y * size);
+        canvas.lineTo(originX + line.pos2.X * size, originY + line.pos2.Y * size);
+        canvas.stroke();
+    });
 
     // Projectiles
     for(const i in projectiles){
@@ -485,16 +613,7 @@ function draw(){
         canvas.setTransform(1, 0, 0, 1, 0, 0);
     }
     
-    // Lines {x1: 0, x2: 0, y1: 0, y2: 0}
 
-    lines.forEach(line => {
-        canvas.lineWidth = line.thickness;
-        canvas.strokeStyle = line.colour;
-        canvas.beginPath();
-        canvas.moveTo(originX + line.pos1.X * size, originY + line.pos1.Y * size);
-        canvas.lineTo(originX + line.pos2.X * size, originY + line.pos2.Y * size);
-        canvas.stroke();
-    });
 
     // Instructions
     canvas.font = "20px Arial";
@@ -661,7 +780,7 @@ class MovingEntity extends Entity {
         let hitFace = null;
         do { // Y
             do { // X
-                if (read(x, y) == 1)
+                if (readWorld(x, y) == 1)
                 {
                     // overlapTile might need to be used for positioning the entity correctly during an edge case.
                     overlapTile = new Vector2(x, y);
@@ -750,7 +869,7 @@ class LivingEntity extends MovingEntity {
         this._maxHealth = hp;
     }
     damage(value = 1){
-        this._isHit = 2;
+        this._isHit = 4;
         this._health -= value;
         if(this._health <= 0)
             this._removed = true;
@@ -771,6 +890,9 @@ class LivingEntity extends MovingEntity {
     }
     get faction(){
         return this._faction;
+    }
+    get immune(){
+        return this._isHit > 0;
     }
 }
 
@@ -1085,6 +1207,7 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+let pathfindingArray = []; // Array of markers
 document.addEventListener("keyup", (e) => {
     switch(e.key){
         case "d":
@@ -1109,7 +1232,20 @@ document.addEventListener("keyup", (e) => {
             firingLasers = false;
             break;
         case "j":
-            player.position = mouseWorldPos;
+
+            pathfindingArray.forEach(entity => {
+                entity._removed = true;
+            });
+            pathfindingArray.length = 0;
+
+            let pathfindingTest = new Pathfind(player.position, mouseWorldPos);
+            if(pathfindingTest.found){
+                pathfindingTest.path.map(value => {
+                    let marker = new Marker(value.X + 0.5, value.Y + 0.5, "pink");
+                    pathfindingArray.push(marker);
+                    entities.push(marker);
+                });
+            }
             break;
         default:
             break;
@@ -1145,63 +1281,3 @@ window.onresize = resizeWindow;
 resizeWindow();
 start();
 draw();
-
-// ============================================================================================================================================= //
-//   OLD 
-// ============================================================================================================================================= //
-
-/*
-class ProjectileOld extends MovingEntity {
-    constructor(shotFrom, shotTo, desiredTarget, speed = 0.5){
-        super(shotFrom.X, shotFrom.Y);
-        this._desiredTarget = desiredTarget;
-
-        let unitVector = Vector2.subtract(shotFrom, shotTo).normalize();
-        this._momentum = new Vector2(unitVector.X * speed, unitVector.Y * speed);
-        this._angle = findAngleFromUnitVector(unitVector);
-
-        this._cooldown = 125;
-        this._colour = "yellow";
-        this.setHitbox(0.2, 0.2);
-        this._damage = 1;
-    }
-    getAngleFromMomentum(){
-        this._angle = findAngleFromUnitVector(this._momentum.normalize());
-    }
-    update(){
-        if(this._cooldown <= 0){
-            this._removed = true;
-            return null;
-        }
-
-        // Check entity collisions first
-        let collided = null;
-        for(const entity of entities){
-            if(entity.faction == this._desiredTarget){
-                let left = entity.position.X - entity.hitboxHalf.X;
-                let right = entity.position.X + entity.hitboxHalf.X;
-
-                let top = entity.position.Y - entity.hitboxHalf.Y;
-                let bottom = entity.position.Y + entity.hitboxHalf.Y;
-
-                if(this._position.X <= right && this._position.X >= left && this._position.Y >= top && this._position.Y <= bottom){
-                    collided = entity;
-                    break;
-                }
-            }
-        }
-
-        // If collided with an entity
-        if(collided != null){
-            collided.damage(this._damage);
-            this._removed = true;
-            return collided;
-        }
-        else{
-            // If no collision, do movement and wall collision checks
-            let hit = super.update();
-            if(hit != null) this._removed = true;
-            return hit;
-        }
-    }
-}*/
