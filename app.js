@@ -1,52 +1,31 @@
-// ============================================================================================================================================= //
-//   Vectors
-// ============================================================================================================================================= //
-class Vector2{
-    constructor(X, Y){
-        this._x = X;
-        this._y = Y;
-        this._magnitude = Vector2.calculateMagnitude(this);
-    }
-    get X() {
-        return this._x;
-    }
-    get Y() {
-        return this._y;
-    }
-    set X(x) {
-        this._x = x;
-        this._magnitude = Vector2.calculateMagnitude(this);
-    }
-    set Y(y) {
-        this._y = y;
-        this._magnitude = Vector2.calculateMagnitude(this);
-    }
-    get magnitude(){
-        return this._magnitude;
-    }
-    normalize(){ // Return a normalized copy of the current vector
-        if(this._magnitude != 0){
-            return new Vector2(this._x / this._magnitude, this._y / this._magnitude);
-        }
-        return this;
-    }
-    multiply(number){ // Returns a multiplied copy of the current vector
-        return new Vector2(this._x * number, this._y * number);
-    }
-    static calculateMagnitude(vector2){
-        return Math.sqrt((vector2.X * vector2.X) + (vector2.Y * vector2.Y));
-    }
-    static subtract(firstVector2, secondVector2){
-        return new Vector2(secondVector2.X - firstVector2.X, secondVector2.Y - firstVector2.Y);
-    }
-    static add(firstVector2, secondVector2){
-        return new Vector2(firstVector2.X + secondVector2.X , firstVector2.Y + secondVector2.Y);
-    }
-    toString(){
-        return "{ " + this._x + ", " + this._y + " }";
-    }
-}
+import Vector2 from "./src/Vector2.js";
 
+// ============================================================================================================================================= //
+//   GENERAL VARIABLES AND FUNCTIONS
+// ============================================================================================================================================= //
+
+const game = document.getElementById("game");
+let paused = true;
+
+let world = [];
+let entities = [];
+let projectiles = [];
+let lines = [];
+
+const HALFPI = Math.PI / 2;
+
+let screenHalf = new Vector2(100, 100);
+let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
+let mouseScreenPos = new Vector2(0, 0);
+let mouseWorldPos = new Vector2(0, 0);
+
+let player = null;
+let firingProjectiles = false;
+let firingLasers = false;
+
+function round(num, to = 1000){
+    return (Math.round(num * to) / to);
+}
 
 function findAngleFromUnitVector(unitVector){
     return HALFPI + (unitVector.X < 0 ? Math.acos(unitVector.Y) : -Math.acos(unitVector.Y));
@@ -69,13 +48,18 @@ const nX = new Vector2(-1, 0);
 const pY = new Vector2(0, 1);
 const nY = new Vector2(0, -1);
 
+/**
+ * A class which contains the path as an array (if found).
+ *
+ * @param {Vector2} startPos The path's start point
+ * @param {Vector2} finishPos The path's end point
+ * @returns {{ Entity: Entity; HitPos: Vector2; Side: boolean}} Entity = Hit entity (Nullable), HitPos = Exact location, Side = Side of entity hit (true = Horizontal side, false = Vertical side, null = Nothing hit)
+ */
 class Pathfind {
     constructor(startPos, finishPos){
         
         startPos = new Vector2(Math.floor(startPos.X), Math.floor(startPos.Y));
         finishPos = new Vector2(Math.floor(finishPos.X), Math.floor(finishPos.Y));
-        console.log(startPos);
-        console.log(finishPos);
         // Keeps track of what paths are going where
         this._pathMap = [];
         this._path = [];
@@ -114,7 +98,6 @@ class Pathfind {
                 // Look -X -Y
                 search(Vector2.add(Vector2.add(origin, nX), nY), origin);
             });
-            //console.log(newSearchingPositions.length);
             if(newSearchingPositions.length == 0 || timeout == 0){
                 running = false;
             }
@@ -126,31 +109,24 @@ class Pathfind {
                     }
                 });
                 if(!found){
-                    searchingPositions.length = 0;
-                    newSearchingPositions.map(value => {
-                        searchingPositions.push(value);
-                    });
+                    // Creates a copy of the newSearchingPositions array for the next run
+                    searchingPositions = [...newSearchingPositions]; 
                     newSearchingPositions.length = 0;
                 }
             }
         }
         if(found != null){
-            console.log("Found");
-            this._found = true;
-            
+            this._found = true;      
             let track = finishPos;
             searching = finishPos;
-
-            do{
+            do{      
+                this._path.push(searching);    
                 searching = track;
-                track = this.read(searching);
-                this._path.push(searching);
-            } while (!(track.X == searching.X && track.Y == searching.Y))
-            
+                track = this.read(searching); 
+                
+            } while (!(track.X == searching.X && track.Y == searching.Y))      
         }
-        else{
-            console.log("Not found");
-            
+        else{ 
             this._found = false;
         }
     }
@@ -166,9 +142,17 @@ class Pathfind {
     read(position){
         return this._pathMap[position.X][position.Y];
     }
+    /**
+     * Returns if a path has been found between the start and finish
+     * @returns {boolean} 
+     */
     get found(){
         return this._found;
     }
+    /**
+     * Returns the path from the finish position to the start position
+     * @returns {[Vector2]]} 
+     */
     get path(){
         return this._path;
     }
@@ -376,40 +360,9 @@ function findEntityFromRay(start, finish, faction){
 function recalculateMousePos(){
     let middleOffset = Vector2.subtract(screenHalf, new Vector2(mouseScreenPos.X, mouseScreenPos.Y));
     mouseWorldPos = Vector2.add(new Vector2(
-        (middleOffset.X / size), 
-        (middleOffset.Y / size)
+        (middleOffset.X / zoomMultiplier), 
+        (middleOffset.Y / zoomMultiplier)
     ), player.position);
-}
-
-// ============================================================================================================================================= //
-//   GENERAL VARIABLES AND FUNCTIONS
-// ============================================================================================================================================= //
-
-const game = document.getElementById("game");
-let paused = true;
-
-let world = [];
-let entities = [];
-let projectiles = [];
-let lines = [];
-
-const HALFPI = Math.PI / 2;
-
-let screenHalf = new Vector2(100, 100);
-let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
-let mouseScreenPos = new Vector2(0, 0);
-let mouseWorldPos = new Vector2(0, 0);
-
-let player = null;
-let firingProjectiles = false;
-let firingLasers = false;
-
-function togglePause(){
-    paused = !paused;
-}
-
-function round(num, to = 1000){
-    return (Math.round(num * to) / to);
 }
 
 // ============================================================================================================================================= //
@@ -494,6 +447,7 @@ function start(){
     entities.push(new LargeEnemy(21.2, 13.6));
     entities.push(new LargeEnemy(47.2, 14.1));
     entities.push(new ClusterEnemy(47, 27));
+    entities.push(new MovingEnemy(37, 12));
 
     player = new Player(20.2, 21.99);
     entities.push(player);
@@ -507,7 +461,7 @@ function start(){
 //   DRAWING
 // ============================================================================================================================================= //
 
-let size = 20;
+let zoomMultiplier = 30;
 let canvas = game.getContext("2d");
 const HEALTHBAR_HEIGHT = 5;
 
@@ -517,8 +471,8 @@ function draw(){
     canvas.clearRect(0, 0, game.width, game.height);
 
     // The walls start anti-aliasing strangely (gaps in between individual wall blocks) without rounding.
-    let originX = Math.round(screenHalf.X - (player.position.X * size));
-    let originY = Math.round(screenHalf.Y - (player.position.Y * size));
+    let originX = Math.round(screenHalf.X - (player.position.X * zoomMultiplier));
+    let originY = Math.round(screenHalf.Y - (player.position.Y * zoomMultiplier));
 
     // World
     for(let x = 0; x < world.length; x++){
@@ -527,7 +481,7 @@ function draw(){
                 if(world[x][y] == 1){
                     canvas = game.getContext("2d");
                     canvas.fillStyle = "#DDDDDD";
-                    canvas.fillRect(originX + x * size, originY + y * size, size, size);
+                    canvas.fillRect(originX + x * zoomMultiplier, originY + y * zoomMultiplier, zoomMultiplier, zoomMultiplier);
                 }
             }
         }
@@ -539,8 +493,8 @@ function draw(){
         canvas.lineWidth = line.thickness;
         canvas.strokeStyle = line.colour;
         canvas.beginPath();
-        canvas.moveTo(originX + line.pos1.X * size, originY + line.pos1.Y * size);
-        canvas.lineTo(originX + line.pos2.X * size, originY + line.pos2.Y * size);
+        canvas.moveTo(originX + line.pos1.X * zoomMultiplier, originY + line.pos1.Y * zoomMultiplier);
+        canvas.lineTo(originX + line.pos2.X * zoomMultiplier, originY + line.pos2.Y * zoomMultiplier);
         canvas.stroke();
     });
 
@@ -548,37 +502,27 @@ function draw(){
     for(const i in projectiles){
         let projectile = projectiles[i];
         let position = projectile.position;
-        if(projectile.oldPositions.length > 1){
-            // Used to draw bullets bouncing off walls
-        }
+        //if(projectile.oldPositions.length > 1){
+            // Used to draw bullets bouncing off walls, not yet implemented
+        //}
         // Draw last oldPos to currentPos
-        canvas.lineWidth = projectile.hitbox.Y * size;
+        canvas.lineWidth = projectile.hitbox.Y * zoomMultiplier;
         canvas.strokeStyle = projectile.colour;
         let start = projectile.oldPositions[projectile.oldPositions.length - 1];
         canvas.beginPath();
-        canvas.moveTo(originX + start.X * size, originY + start.Y * size);
-        canvas.lineTo(originX + position.X * size, originY + position.Y * size);
+        canvas.moveTo(originX + start.X * zoomMultiplier, originY + start.Y * zoomMultiplier);
+        canvas.lineTo(originX + position.X * zoomMultiplier, originY + position.Y * zoomMultiplier);
         canvas.stroke();
-        /*
-        let hitbox = projectile.hitbox;
-        let hitboxHalf = projectile.hitboxHalf;
-        canvas.translate(originX + position.X * size, originY + position.Y * size);
-        canvas.rotate(projectile.angle);
-        canvas.fillStyle = projectile.colour;
-        canvas.fillRect(-hitboxHalf.X * size , -hitboxHalf.Y * size, hitbox.X * size, hitbox.Y * size);
-
-        // Reset ctx
-        canvas.setTransform(1, 0, 0, 1, 0, 0);*/
     }
 
     // Entities
     for(const i in entities){
         let entity = entities[i];
 
-        let x = originX + (entity.position.X - entity.hitboxHalf.X) * size;
-        let y = originY + (entity.position.Y - entity.hitboxHalf.Y) * size;
-        let xSize = entity.hitbox.X * size;
-        let ySize = entity.hitbox.Y * size
+        let x = originX + (entity.position.X - entity.hitboxHalf.X) * zoomMultiplier;
+        let y = originY + (entity.position.Y - entity.hitboxHalf.Y) * zoomMultiplier;
+        let xSize = entity.hitbox.X * zoomMultiplier;
+        let ySize = entity.hitbox.Y * zoomMultiplier
 
         // Body
         canvas.fillStyle = entity.colour;
@@ -599,22 +543,20 @@ function draw(){
             }
 
             // Turrets
-            canvas.translate(originX + entity.position.X * size, originY + entity.position.Y * size);
+            canvas.translate(originX + entity.position.X * zoomMultiplier, originY + entity.position.Y * zoomMultiplier);
             canvas.rotate(entity.angle);
             canvas.fillStyle = "#777777";
             if(entity instanceof ClusterEnemy){
-                canvas.fillRect(-0.1 * size, -0.25 * size, 1 * size, 0.5 * size );
+                canvas.fillRect(-0.1 * zoomMultiplier, -0.25 * zoomMultiplier, 1 * zoomMultiplier, 0.5 * zoomMultiplier );
             }
             else{
-                canvas.fillRect(-0.1 * size, -0.1 * size, 1 * size, 0.2 * size );
+                canvas.fillRect(-0.1 * zoomMultiplier, -0.1 * zoomMultiplier, 1 * zoomMultiplier, 0.2 * zoomMultiplier );
             }
         }
         // Reset ctx
         canvas.setTransform(1, 0, 0, 1, 0, 0);
     }
     
-
-
     // Instructions
     canvas.font = "20px Arial";
     canvas.fillStyle = "#FFFFFF";
@@ -623,6 +565,7 @@ function draw(){
     canvas.fillText("Fire laser - R", 10, 60); 
     canvas.fillText("Pause - P", 10, 80); 
     canvas.fillText("Reset - Space", 10, 100); 
+    canvas.fillText("Pathfind test - J", 10, 120); 
 }
 
 // ============================================================================================================================================= //
@@ -1011,6 +954,57 @@ class ClusterEnemy extends Enemy{
         }
         else{
             // MOVE
+        }
+        super.update();
+    }
+}
+
+const PATHFIND_OFFSET = new Vector2(0.5, 0.5);
+class MovingEnemy extends Enemy {
+    constructor(posX, posY){
+        super(posX, posY);
+        this._colour = "purple";
+        this._path = null;
+        this._pathIndex = 0;
+        this._pathCooldown = 25;
+    }
+    update(){
+        this.changeAngle();
+        this._pathCooldown--;
+        if(this.canSeePlayer()){
+            this._momentum = Vector2.zero;
+            if(this._cooldown <= 0){
+                let rayDirection = this.getDirectionToPlayer();
+                projectiles.push(new Projectile(this._position, rayDirection, "Friendly", 1.2));
+                this._cooldown = 25;
+            }
+        }
+        else{
+            if(this._pathCooldown <= 0 || this._path == null){ // Refresh path;
+                let pathfind = new Pathfind(this._position, player.position);
+                if(pathfind.found){
+                    this._path = pathfind.path;
+                    this._pathIndex = pathfind.path.length - 1;
+                    this._pathCooldown = 25;
+                }
+            }
+            else{
+                let direction = null;
+                let foundNextSpot = false;
+    
+                do{
+                    let newSpot = Vector2.add(this._path[this._pathIndex], PATHFIND_OFFSET)
+                    direction = Vector2.subtract(this._position, newSpot);
+                    if(direction.magnitude < 0.1){
+                        this._pathIndex--;
+                    }
+                    else{
+                        foundNextSpot = true;
+                    }
+                } while (!foundNextSpot)
+    
+                this._momentum = direction.normalize().multiply(0.1);
+            }
         }
         super.update();
     }
