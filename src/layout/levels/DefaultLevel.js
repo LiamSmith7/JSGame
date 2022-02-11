@@ -1,3 +1,4 @@
+import { Vector2 } from "../../Utils.js";
 import LayoutManager from "../LayoutManager.js";
 
 class DefaultLevel {
@@ -13,8 +14,7 @@ class DefaultLevel {
         this._layoutManager.placeVertical(30, 10, 30, 1);
     }
     // Gets
-    get offsetX() {return this._offsetX;}
-    get offsetY() {return this._offsetY;}
+    get playerSpawn() {return new Vector2(this._offsetX, this._offsetY);}
     get layout() {return this._layoutManager.layout;}
     /**
      * Converts the coordinates of the level to the coordinates of the world.
@@ -22,7 +22,6 @@ class DefaultLevel {
      * @param {*} y Y coordinate of the level
      * @returns {[float, float]} Coordinates of the world
      */
-    convert(x, y) {return [x + this._offsetX, y + this._offsetY];}
     summon(){
         return [];
     }

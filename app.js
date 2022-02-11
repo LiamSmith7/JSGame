@@ -89,7 +89,7 @@ function draw(){
     });
 
     // Entities
-world.entities.forEach(entity => {
+    world.entities.forEach(entity => {
         canvas.setTransform(1, 0, 0, 1, 0, 0); // Reset rotations
         let x = originX + (entity.position.X - entity.hitboxHalf.X) * zoomMultiplier;
         let y = originY + (entity.position.Y - entity.hitboxHalf.Y) * zoomMultiplier;

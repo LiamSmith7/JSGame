@@ -56,6 +56,15 @@ class Player extends LivingEntity {
             }
         }
     }
+    /**
+     * @param {Vector2} pos
+     */
+    set position(pos){
+        this._position = pos;
+    }
+    get position(){
+        return this._position;
+    }
 }
 
 export default Player;

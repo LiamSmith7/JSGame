@@ -32,6 +32,9 @@ class LayoutManager {
             return this._layout[x][y];
         return null;
     }
+    setLayout(array){
+        this._layout = array;
+    }
 }
 
 export default LayoutManager;

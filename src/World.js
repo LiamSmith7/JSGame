@@ -10,25 +10,24 @@ const iterate = (item) => {
 class World{
     constructor(){
         this._paused = false;
-        this._player = new Player(20, 20);
+        this._player = new Player(2, 2);
         this._entities = [this._player];
         this._projectiles = [];
         this._lines = [];
 
         // World layout
         this._layoutManager = new LayoutManager();
-        LevelsManager.forEach(level => {
-            // Loads each level from LevelsManager to the world (with a given offset)
-            level.layout.forEach((yArray, x) => {
-                yArray.forEach((id, y) => {
-                    this._layoutManager.place(level.offsetX + x, level.offsetY + y, id)
-                });
-            });
-
-            level.summon().forEach(entity => {
-                this._entities.push(entity);
+        LevelsManager.layout.forEach((yArray, x) => {
+            yArray.forEach((id, y) => {
+                this._layoutManager.place(x, y, id)
             });
         });
+
+        LevelsManager.summon().forEach(entity => {
+            this._entities.push(entity);
+        });
+
+        this._player.position = LevelsManager.playerSpawn;
     }
     // GET
     get entities(){
