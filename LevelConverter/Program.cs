@@ -5,14 +5,6 @@ namespace LevelConverter
 {
     class Program
     {
-        // Prompt user to close file and end the program.
-        static void finish()
-        {
-            Console.WriteLine("Press any key to close.");
-            Console.ReadKey();
-            return;
-        }
-
         static void Main(string[] args)
         {
             string directory = Directory.GetCurrentDirectory();
@@ -23,19 +15,18 @@ namespace LevelConverter
             if(!Directory.Exists(inputDirectory)){
                 Console.WriteLine("No input directory found.");
                 Directory.CreateDirectory(inputDirectory);
-                finish();
+                return;
             }
 
             // Checks for .png files inside directory
             string[] inputFiles = Directory.GetFiles(inputDirectory, "*.png");
             if(inputFiles.Length == 0){
                 Console.WriteLine("No files count be found to convert.");
-                finish();
+                return;
             }
 
             // Creates output directory if it doesn't exist
             if(!Directory.Exists(outputDirectory)){
-                Console.WriteLine("No output directory found.");
                 Directory.CreateDirectory(outputDirectory);
             }
 
@@ -71,7 +62,7 @@ namespace LevelConverter
                 }
 
                 // Create the class file
-                classStart = "import DefaultLevel from \"./DefaultLevel.js\";\n\nclass " + className + " extends DefaultLevel{\n\tconstructor(){\n\t\tsuper(" + playerPosition +"); //EDIT ME\n\t\tthis._layoutManager.setLayout(\n\t\t\t";
+                classStart = "import DefaultLevel from \"./DefaultLevel.js\";\n\nclass " + className + " extends DefaultLevel{\n\tconstructor(){\n\t\tsuper(" + playerPosition +");\n\t\tthis._layoutManager.setLayout(\n\t\t\t";
                 classEnd = "\n\t\t);\n\t}\n\tsummon(){\n\t\treturn []; //ADD ENTITIES INTO THIS ARRAY\n\t}\n}\n\nexport default " + className + ";";
 
                 output = classStart + output + "\n\t\t\t]" + classEnd;
