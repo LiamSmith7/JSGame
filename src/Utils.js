@@ -228,7 +228,8 @@ function findEntityFromRay(start, finish, faction){
     let upperBound = new Vector2(Math.max(start.X, finish.X), Math.max(start.Y, finish.Y));
     let lowerBound = new Vector2(Math.min(start.X, finish.X), Math.min(start.Y, finish.Y));
 
-    world.entities.forEach(entity => {
+    for(let i = 0, l = world.entities.length; i < l; i++){
+        let entity = world.entities[i];
         if((find == null || entity.faction == faction) && !entity.immune){
             let topLeft = Vector2.subtract(entity.hitboxHalf, entity.position);
             let bottomRight = Vector2.add(entity.position, entity.hitboxHalf);
@@ -273,7 +274,7 @@ function findEntityFromRay(start, finish, faction){
             }
             
         }
-    });
+    }
 
     // {Entity, Vector2}
     let closest = {Entity: null, HitPos: finish, Side: null};
@@ -283,13 +284,14 @@ function findEntityFromRay(start, finish, faction){
     }
 
     let closestMagnitude = rayVector.magnitude;
-    hitPoints.forEach(element => {
+    for(let i = 0, l = hitPoints.length; i < l; i++){
+        let element = hitPoints[i];
         let checkingMagnitude = Vector2.subtract(start, element.HitPos).magnitude;
         if(checkingMagnitude < closestMagnitude){
             closestMagnitude = checkingMagnitude;
             closest = element;
         }
-    });
+    }
 
     return closest;
 }
@@ -343,7 +345,8 @@ function pathfind(startPos, finishPos){
 
     while(running){
         timeout--;
-        searchingPositions.forEach(origin => {
+        for(let i = 0, l = searchingPositions.length; i < l; i++){
+            let origin = searchingPositions[i];
             // Look +X
             search(Vector2.add(origin, pX), origin);
             // Look -X
@@ -361,17 +364,18 @@ function pathfind(startPos, finishPos){
             search(Vector2.add(Vector2.add(origin, nX), pY), origin);
             // Look -X -Y
             search(Vector2.add(Vector2.add(origin, nX), nY), origin);
-        });
+        }
         if(newSearchingPositions.length == 0 || timeout == 0){
             running = false;
         }
         else{
-            newSearchingPositions.forEach(newPosition => {
+            for(let i = 0, l = newSearchingPositions.length; i < l; i++){
+                let newPosition = newSearchingPositions[i];
                 if(newPosition.X == finishPos.X && newPosition.Y == finishPos.Y){
                     found = newPosition;
                     running = false;
                 }
-            });
+            }
             if(!found){
                 // Creates a copy of the newSearchingPositions array for the next run
                 searchingPositions = [...newSearchingPositions]; 

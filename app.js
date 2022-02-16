@@ -12,6 +12,9 @@ let screenHalf = new Vector2(100, 100);
 let movement = [0, 0, 0, 0]; // 0 = up, 1 = down, 2 = left, 3 = right
 let mouseScreenPos = new Vector2(0, 0);
 
+let drawUnitsX = 1;
+let drawUnitsY = 1;
+
 function recalculateMousePos(){
     let middleOffset = Vector2.subtract(screenHalf, new Vector2(mouseScreenPos.X, mouseScreenPos.Y));
 
@@ -44,7 +47,7 @@ function start(){
 // ============================================================================================================================================= //
 
 // Drawing Variables
-let zoomMultiplier = 30;
+let zoomMultiplier = 32;
 const HEALTHBAR_HEIGHT = 5;
 
 function draw(){
@@ -56,28 +59,32 @@ function draw(){
     let originX = Math.round(screenHalf.X - (world.player.position.X * zoomMultiplier));
     let originY = Math.round(screenHalf.Y - (world.player.position.Y * zoomMultiplier));
 
+    let playerX = Math.round(world.player.position.X);
+    let playerY = Math.round(world.player.position.Y);
     // World
-    world.layout.forEach((yArray, x) => {
-        yArray.forEach((id, y) => {
-            if(id == 1){
+    for(let x = playerX - drawUnitsX, lX = playerX + drawUnitsX; x < lX; x++){
+        for(let y = playerY - drawUnitsY, lY = playerY + drawUnitsY; y < lY; y++){
+            if(world.read(x, y) == 1){
                 canvas.fillStyle = "#DDDDDD";
                 canvas.fillRect(originX + x * zoomMultiplier, originY + y * zoomMultiplier, zoomMultiplier, zoomMultiplier);
             }
-        })
-    });
+        }
+    }
     
     // Lines {x1: 0, x2: 0, y1: 0, y2: 0}
-    world.lines.forEach(line => {
+    for(let i = 0, l = world.lines.length; i < l; i++){
+        let line = world.lines[i];
         canvas.lineWidth = line.thickness;
         canvas.strokeStyle = line.colour;
         canvas.beginPath();
         canvas.moveTo(originX + line.pos1.X * zoomMultiplier, originY + line.pos1.Y * zoomMultiplier);
         canvas.lineTo(originX + line.pos2.X * zoomMultiplier, originY + line.pos2.Y * zoomMultiplier);
         canvas.stroke();
-    });
+    }
 
     // Projectiles
-    world.projectiles.forEach(projectile => {
+    for(let i = 0, l = world.projectiles.length; i < l; i++){
+        let projectile = world.projectiles[i];
         let position = projectile.position;
         canvas.lineWidth = projectile.hitbox.Y * zoomMultiplier;
         canvas.strokeStyle = projectile.colour;
@@ -86,10 +93,11 @@ function draw(){
         canvas.moveTo(originX + start.X * zoomMultiplier, originY + start.Y * zoomMultiplier);
         canvas.lineTo(originX + position.X * zoomMultiplier, originY + position.Y * zoomMultiplier);
         canvas.stroke();
-    });
+    }
 
     // Entities
-    world.entities.forEach(entity => {
+    for(let i = 0, l = world.entities.length; i < l; i++){
+        let entity = world.entities[i];
         canvas.setTransform(1, 0, 0, 1, 0, 0); // Reset rotations
         let x = originX + (entity.position.X - entity.hitboxHalf.X) * zoomMultiplier;
         let y = originY + (entity.position.Y - entity.hitboxHalf.Y) * zoomMultiplier;
@@ -125,7 +133,7 @@ function draw(){
                 canvas.fillRect(-0.1 * zoomMultiplier, -0.1 * zoomMultiplier, 1 * zoomMultiplier, 0.2 * zoomMultiplier );
             }
         }
-    }) 
+    }
 
     canvas.setTransform(1, 0, 0, 1, 0, 0);
     // Instructions
@@ -235,6 +243,10 @@ function resizeWindow(){
     game.height = window.innerHeight;
     game.width = window.innerWidth;
     screenHalf = new Vector2(window.innerWidth / 2, window.innerHeight / 2);
+
+    // Sets up the draw distance away from the player
+    drawUnitsX = Math.ceil((window.innerWidth / zoomMultiplier) / 2) + 1;
+    drawUnitsY = Math.ceil((window.innerHeight / zoomMultiplier) / 2) + 1;
 }
 
 window.onresize = resizeWindow;
