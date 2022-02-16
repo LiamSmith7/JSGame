@@ -47,7 +47,7 @@ function start(){
 // ============================================================================================================================================= //
 
 // Drawing Variables
-let zoomMultiplier = 32;
+let zoomMultiplier = 30;
 const HEALTHBAR_HEIGHT = 5;
 
 function draw(){
@@ -143,7 +143,8 @@ function draw(){
     canvas.fillText("Fire projectile - Left Click", 10, 40); 
     canvas.fillText("Fire laser - R", 10, 60); 
     canvas.fillText("Pause - P", 10, 80); 
-    canvas.fillText("Reset - Space", 10, 100); 
+    canvas.fillText("Reset - Space", 10, 100);
+    canvas.fillText("Position [" + world.player.position.X + ", " + world.player.position.Y + "]", 10, 120);
 }
 
 

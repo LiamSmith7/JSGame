@@ -1,4 +1,3 @@
-import Level1 from "./levels/Level1.js";
-import Level2 from "./levels/Level2.js";
+import Level3 from "./levels/Level3.js";
 
-export default new Level2();
+export default new Level3();
