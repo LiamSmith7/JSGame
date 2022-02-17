@@ -61,7 +61,7 @@ class Level3 extends DefaultLevel{
 			new ClusterEnemy(1.5, 31.5),
 			new ClusterEnemy(22.5, 37.5),
 			new PathfindingEnemy(31.5, 38.5),
-			new Enemy(39, 27),
+			new Enemy(39, 28),
 			new Enemy(27.5, 34.5),
 			new LargeEnemy(32.75, 20.5),
 			new LargeEnemy(34.25, 20.5),
